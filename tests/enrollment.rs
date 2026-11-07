@@ -56,3 +56,27 @@ fn corrupt_or_unknown_enrollment_is_not_replaced() {
     json["unexpected"] = true.into();
     assert!(Enrollment::decode(&serde_json::to_vec(&json).unwrap()).is_err());
 }
+
+#[test]
+fn stored_identity_requires_a_standard_v4_uuid() {
+    let enrollment = Enrollment::new("https://example.com", credential()).unwrap();
+    let mut value: serde_json::Value =
+        serde_json::from_slice(&enrollment.encode().unwrap()).unwrap();
+    // Version nibble is 4, but the variant is not RFC 4122/9562.
+    value["agent_uuid"] = "00000000-0000-4000-0000-000000000000".into();
+    assert!(Enrollment::decode(&serde_json::to_vec(&value).unwrap()).is_err());
+}
+
+#[test]
+fn rejects_unknown_version_and_duplicate_fields_in_complete_records() {
+    let enrollment = Enrollment::new("https://example.com", credential()).unwrap();
+    let encoded = enrollment.encode().unwrap();
+    let mut value: serde_json::Value = serde_json::from_slice(&encoded).unwrap();
+    value["schema_version"] = 2.into();
+    assert!(Enrollment::decode(&serde_json::to_vec(&value).unwrap()).is_err());
+    let duplicate = std::str::from_utf8(&encoded).unwrap().replace(
+        "\"schema_version\":1",
+        "\"schema_version\":1,\"schema_version\":1",
+    );
+    assert!(Enrollment::decode(duplicate.as_bytes()).is_err());
+}

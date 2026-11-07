@@ -44,7 +44,10 @@ impl Enrollment {
     }
     fn validate(&self) -> Result<(), &'static str> {
         let origin = &self.management_origin;
-        if self.schema_version != 1 || self.agent_uuid.get_version_num() != 4 {
+        if self.schema_version != 1
+            || self.agent_uuid.get_version_num() != 4
+            || self.agent_uuid.get_variant() != uuid::Variant::RFC4122
+        {
             return Err("invalid_enrollment");
         }
         if origin.scheme() != "https"

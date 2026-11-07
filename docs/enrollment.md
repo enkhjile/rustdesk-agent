@@ -11,7 +11,8 @@ and an administrator-supplied per-device bearer credential. The entire document
 is encrypted using Windows DPAPI with machine scope and UI forbidden. It lives
 at the Windows Known Folder ProgramData path under
 `RustDeskAgentEnrollment\enrollment.dpapi`, separate from diagnostic snapshots.
-The location is obtained from Windows, not environment variables.
+The location is obtained from Windows, not environment variables. The system
+ProgramData parent directory must retain its administrator-managed protections.
 
 Machine-scoped DPAPI lets an administrator provision data for a different service
 account without depending on that account's profile. **Any local user who obtains
@@ -72,7 +73,7 @@ valid enrollment and must not treat a missing store as permission to regenerate 
 ## Verification
 
 Portable tests cover origin/token validation, stable serialized identity,
-redacted output and malformed records. Windows-only tests cover DPAPI round-trip,
+redacted output, UUID version/variant, duplicate fields and malformed records. Windows-only tests cover DPAPI round-trip,
 tamper rejection, protected file creation, repeated-enrollment refusal, identity
 retention and rejection of a mismatched access policy. The storage test requires
 an elevated test runner and uses only random temporary paths and dummy credentials.
