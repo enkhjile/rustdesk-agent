@@ -64,7 +64,8 @@ and retention of accepted revisions after application failure. See the [contract
 
 Repository tooling is configured: pinned Rust, Windows CI, cargo-deny policy,
 Renovate, local hooks and automatic semantic-release. The local cargo-deny audit passed on 2026-11-07.
-No remote CI or Windows service/UAC canary has been completed. The remaining gates below are
+PR #1 passed hosted Windows x64 checks and dependency checks before merging.
+Actual Windows service/UAC canary testing has not been completed. The remaining gates below are
 planned validation, not a record of passing tests.
 
 ## Design and alternatives
