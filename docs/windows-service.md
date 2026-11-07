@@ -2,7 +2,8 @@
 
 This development slice targets Windows x64. It is not ready for kiosk deployment.
 It implements SCM start/stop/shutdown and local diagnostic snapshots only. There
-is no enrollment, credential storage, management polling or settings application.
+is no management polling or settings application. Local [enrollment and credential
+storage](enrollment.md) are implemented but require Windows runtime validation.
 No service is installed automatically and no elevation is requested by the agent.
 
 ## Run a one-shot probe
@@ -57,7 +58,10 @@ STOP or SHUTDOWN interrupts the wait or active probe; cancellation requests
 termination of the direct CLI child. Descendant processes are not managed by
 a Windows Job Object in this skeleton. Snapshot-file writes are synchronous
 and must finish before a pending stop can be handled; use a local report directory. SCM receives pending/running/stopped status.
-Fatal runtime/report-write errors stop the service with service-specific code 1.
+Fatal runtime/report-write errors or an invalid existing enrollment store stop
+the service with service-specific code 1. Missing enrollment keeps read-only
+detection available; snapshots include `enrollment: null`. Valid enrollment adds
+only UUID and management origin, never the credential.
 Detection failures are recorded and retried on the next cycle. The JSON file
 contains a timestamp and detection results; it is overwritten, not an audit log
 or atomic durable revision store. Readers may need to retry during replacement.

@@ -23,13 +23,15 @@ Scope: Windows x64 companion service, no production server changes or RustDesk m
    remains separate work; the existing Console API does not supply these routes.
 4. **Windows service and enrollment (skeleton implemented; runtime unverified).**
    The [read-only service](windows-service.md) handles SCM lifecycle and local
-   diagnostic snapshots. Enrollment, identity and credential protection remain
-   pending; the account decision depends on milestone 1.
+   diagnostic snapshots. [Local enrollment](enrollment.md), stable UUID storage and
+   machine-DPAPI protection with service-SID ACLs are implemented; Windows runtime
+   validation and server registration remain pending.
    Complete administrator-only local provisioning. Generate
    the UUID once per enrolled machine; do not bake identity or credentials into
    cloned images. Protect credentials with DPAPI and restrictive ACLs for the
-   selected service identity and administrators. Do not choose DPAPI scope until
-   account/profile behavior is verified. Exit: Windows x64 build plus service
+   service SID and administrators. Machine scope avoids administrator/service
+   profile coupling; ACL enforcement and service-SID access still need Windows
+   runtime validation. Exit: Windows x64 build plus service
    restart, non-admin access and no-post-install-UAC tests pass. No RustDesk writes
    in this milestone; LocalSystem only with evidence that it is required.
 5. **Authenticated polling and durable state (pending; needs 2–4).** Add fixed-origin
@@ -118,6 +120,6 @@ Keep a single crate. Existing `src/lib.rs` owns the portable allowlist and
 reconciliation; `tests/reconcile.rs` exercises behavior. `docs/schemas/` defines
 the proposed wire contract. Add modules only as their milestone is implemented:
 `src/management.rs` for HTTPS and revision handling, `src/windows/` now holds SCM lifecycle, `src/probe.rs` the bounded read-only
-CLI runner, and `src/main.rs` the Windows entry point. Credential storage and
-management integration remain pending. Keep the test backend separate from the installed agent.
+CLI runner, and `src/main.rs` the Windows entry point. Credential storage now lives in `src/windows/credentials.rs` with portable
+validation in `src/enrollment.rs`; management integration remains pending. Keep the test backend separate from the installed agent.
 No empty modules or extra workspace crates are needed now.

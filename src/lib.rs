@@ -199,3 +199,9 @@ pub mod detection;
 
 #[cfg(any(windows, test))]
 pub mod probe;
+
+pub mod enrollment;
+
+#[cfg(windows)]
+#[path = "windows/credentials.rs"]
+pub mod credentials;
