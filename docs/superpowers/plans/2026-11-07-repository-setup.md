@@ -6,7 +6,7 @@ and validation gates remain in [plan](../../plan.md).
 
 ## Completed locally
 
-- Initialized Git on `main` and committed the setup. No remote is configured.
+- Initialized Git on `main` and committed the setup. Published to the public `enkhjile/rustdesk-agent` repository.
 - Kept one `rustdesk-agent` library package, Rust 2024 and tracked Cargo.lock.
 - Pinned Rust 1.99.1 with rustfmt and Clippy.
 - Added EditorConfig, text line-ending rules, and build/secret ignore rules.
@@ -17,11 +17,11 @@ and validation gates remain in [plan](../../plan.md).
 - Used `actions-rust-lang/setup-rust-toolchain` and full SHA action pins.
 - Added local formatting and Conventional Commit hooks. There is no commit-message
   validation in CI. Squash feature PRs; preserve history when merging release branches.
-- Configured opt-in semantic-release on `main` (stable) and `alpha`
+- Configured automatic semantic-release on `main` (stable) and `alpha`
   (prerelease). GitHub releases and tags only; Cargo files and branch commits are
   unchanged by releases.
   A fresh tag history starts at `1.0.0-alpha.1`, not the Cargo placeholder version.
-  Publishing remains disabled unless `RELEASE_ENABLED=true`. The SHA-pinned
+  Publishing follows successful checks on release-branch pushes. The SHA-pinned
   semantic-release action supplies the release tooling; there is no npm project.
 
 
@@ -38,10 +38,10 @@ CI invokes Clippy with warnings denied.
   was created.
 - Alpha-to-stable tagging was verified locally during setup. No custom release
   test scripts are retained. GitHub publishing requires a hosted canary.
-- Workflow YAML was parsed locally; GitHub Actions has not run remotely.
+- Workflow YAML was parsed locally; consult GitHub Actions for remote results.
 - cargo-deny advisories, licenses, bans and sources passed locally on 2026-11-07.
-- Hosting, Renovate activation, branch protection, merge-method repository settings
-  and release credentials/activation remain unconfigured. See README for setup.
+- Hosting and merge methods are configured. Renovate activation and branch
+  protection remain to be configured; release permissions need hosted validation.
 - No service/UAC or end-to-end Windows canary has run.
 
 ## Deferred until needed

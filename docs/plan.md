@@ -19,7 +19,7 @@ read, and strict null/duplicate handling still need dedicated tests. See the
 [contract limits](contract.md#current-implementation-limits).
 
 Repository tooling is configured: pinned Rust, Windows CI, cargo-deny policy,
-Renovate, local hooks and opt-in semantic-release. The local cargo-deny audit passed on 2026-11-07.
+Renovate, local hooks and automatic semantic-release. The local cargo-deny audit passed on 2026-11-07.
 No remote CI or Windows service/UAC canary has been completed. The remaining gates below are
 planned validation, not a record of passing tests.
 

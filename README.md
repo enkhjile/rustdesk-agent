@@ -11,7 +11,7 @@ src/lib.rs          Desired-state parsing, reconciliation and backoff
 tests/reconcile.rs  Tests using an in-memory settings adapter
 docs/plan.md        Design, evidence, milestones and validation gates
 docs/contract.md    Proposed management endpoint contract
-.github/workflows/ci.yml  Windows checks, dependency audit, opt-in releases
+.github/workflows/ci.yml  Windows checks, dependency audit, automatic releases
 .githooks/         Local formatting and commit-message checks
 committed.toml     Commit-message policy
 release.config.mjs Semantic-release branches and plugins
@@ -44,8 +44,9 @@ Add `--offline` to Cargo commands when dependencies are cached. A cross-target
 check does not run Windows tests or establish service/UAC behavior. The core can
 be tested on the development host; the eventual agent targets Windows x64 only.
 
-The repository starts on `main`. Use short-lived branches for subsequent changes.
-There is no deployment automation or remote repository configured by this setup.
+The public repository is [enkhjile/rustdesk-agent](https://github.com/enkhjile/rustdesk-agent).
+Use short-lived branches targeting `alpha`; promote validated changes to `main`.
+No kiosk deployment automation is configured.
 
 Dependency updates use Renovate (`renovate.json`): routine Cargo and GitHub Actions
 updates are grouped separately, with automatic merging disabled. Enable Renovate
@@ -57,8 +58,7 @@ does not activate the bot.
 One GitHub Actions job runs formatting, Clippy, tests and a build on Windows x64
 for pull requests and pushes to `main` and `alpha`. It uses the repository's pinned toolchain
 and lockfile, using `actions-rust-lang/setup-rust-toolchain`. It can also be
-started manually. Actions are pinned to full commit SHAs. Release automation is
-opt-in, as described below. No kiosk deployment is configured. Hosted checks do not validate RustDesk service behavior or UAC.
+started manually. Actions are pinned to full commit SHAs. Release automation runs after checks, as described below. No kiosk deployment is configured. Hosted checks do not validate RustDesk service behavior or UAC.
 
 A separate Linux CI job runs cargo-deny (its action uses Docker) to check the
 locked dependency graph for advisories, licenses and unapproved sources. This
@@ -75,7 +75,7 @@ cargo deny --locked --all-features check
 ```
 
 The audit needs network access to refresh advisory data. cargo-deny passed
-locally on 2026-11-07. CI has not run remotely while the repository remains local.
+locally on 2026-11-07. See the repository Actions tab for remote CI results.
 
 ## Git hooks and releases
 
@@ -105,7 +105,7 @@ way. Merge commits still need a conventional subject, for example
 ## Releases
 
 semantic-release runs after checks on pushes to `alpha`
-and `main`, only when repository variable `RELEASE_ENABLED=true`. Merging a
+and `main`. Merging a
 release-worthy change publishes directly; there is no release PR. `alpha` creates
 GitHub prereleases, and `main` creates stable releases. No npm or crates.io package
 is published, and there is no executable artifact or deployment yet.
@@ -143,14 +143,14 @@ When connecting GitHub:
    The default `GITHUB_TOKEN` is used unless a scoped `RELEASE_TOKEN` is supplied.
    Tag rules must allow the release identity to create release tags. No PR/issue
    comments or issue creation are enabled.
-3. Set `RELEASE_ENABLED=true` only when ready to publish. To pause publishing,
-   remove the variable or set it to `false`. PR and manual workflow runs never
-   publish. Enabling releases applies to both release branches: keep unfinished
-   work on `alpha` until stable promotion is intended.
+3. Releases run automatically after successful checks on pushes to `alpha` and
+   `main`. PR and manual workflow runs never publish. Keep unfinished work on
+   `alpha` until stable promotion is intended. To pause releases, disable the
+   release job in the workflow.
 
-No credentials, remote settings, published tags or releases are created by local
-setup. Existing released versions must never be retagged; release a new fix instead.
-GitHub execution and protected-branch permissions need validation after hosting.
+Existing released versions must never be retagged; release a new fix instead.
+GitHub release permissions and protected-branch rules still need hosted validation.
+
 
 References: [committed](https://github.com/crate-ci/committed),
 [semantic-release branches](https://semantic-release.org/foundation/workflow-configuration/),
