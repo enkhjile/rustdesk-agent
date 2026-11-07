@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Desired state v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "revision",
+    "settings"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 18446744073709551615
+    },
+    "settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "approve_mode": {
+          "enum": [
+            "password",
+            "click",
+            "password-click"
+          ]
+        },
+        "verification_method": {
+          "enum": [
+            "use-temporary-password",
+            "use-permanent-password",
+            "use-both-passwords"
+          ]
+        }
+      }
+    }
+  }
+}

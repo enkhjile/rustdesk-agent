@@ -8,7 +8,7 @@ pub enum Setting {
     VerificationMethod,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct DesiredState {
     pub schema_version: u32,
@@ -16,21 +16,32 @@ pub struct DesiredState {
     pub settings: Settings,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Settings {
+    #[serde(default, deserialize_with = "present_setting")]
     pub approve_mode: Option<ApproveMode>,
+    #[serde(default, deserialize_with = "present_setting")]
     pub verification_method: Option<VerificationMethod>,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize)]
+// Missing fields default to None; present fields must contain a valid enum, never null.
+fn present_setting<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    T::deserialize(deserializer).map(Some)
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub enum ApproveMode {
     Password,
     Click,
     PasswordClick,
 }
-#[derive(Clone, Copy, Debug, Deserialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub enum VerificationMethod {
     UseTemporaryPassword,
@@ -39,6 +50,10 @@ pub enum VerificationMethod {
 }
 
 impl DesiredState {
+    fn is_valid(&self) -> bool {
+        self.schema_version == 1 && self.revision > 0 && !self.pairs().is_empty()
+    }
+
     fn pairs(&self) -> Vec<(Setting, &'static str)> {
         let mut pairs = Vec::new();
         if let Some(mode) = self.settings.approve_mode {
@@ -68,7 +83,7 @@ impl DesiredState {
 pub fn parse_desired(json: &[u8]) -> Result<DesiredState, &'static str> {
     let desired: DesiredState =
         serde_json::from_slice(json).map_err(|_| "invalid_json_or_schema")?;
-    if desired.schema_version != 1 || desired.revision == 0 || desired.pairs().is_empty() {
+    if !desired.is_valid() {
         return Err("invalid_state");
     }
     Ok(desired)
@@ -105,10 +120,46 @@ pub struct Report {
     pub results: BTreeMap<Setting, Outcome>,
 }
 
+/// In-memory accepted-state watermark. Reuse one guard per enrolled device.
+/// This does not provide restart protection; durable storage is not implemented.
+#[derive(Debug, Default)]
+pub struct RevisionGuard {
+    accepted: Option<DesiredState>,
+}
+
+impl RevisionGuard {
+    pub fn accepted(&self) -> Option<&DesiredState> {
+        self.accepted.as_ref()
+    }
+
+    /// Reject invalid or stale state before I/O, retaining acceptance even if
+    /// application fails. Equal revisions must have identical parsed settings.
+    pub fn reconcile(
+        &mut self,
+        io: &mut impl SettingsIo,
+        desired: &DesiredState,
+    ) -> Result<Report, &'static str> {
+        if !desired.is_valid() {
+            return Err("invalid_state");
+        }
+        if let Some(accepted) = &self.accepted {
+            if desired.revision < accepted.revision {
+                return Err("stale_revision");
+            }
+            if desired.revision == accepted.revision && desired.settings != accepted.settings {
+                return Err("revision_conflict");
+            }
+        }
+        self.accepted = Some(desired.clone());
+        Ok(reconcile(io, desired))
+    }
+}
+
+/// Reconcile one state without revision history. Use RevisionGuard for repeated polls.
 pub fn reconcile(io: &mut impl SettingsIo, desired: &DesiredState) -> Report {
     let mut results = BTreeMap::new();
     let pairs = desired.pairs();
-    let valid = desired.schema_version == 1 && desired.revision > 0 && !pairs.is_empty();
+    let valid = desired.is_valid();
     if !valid {
         return Report {
             desired_revision: desired.revision,
