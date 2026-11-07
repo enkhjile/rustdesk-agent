@@ -1,0 +1,5 @@
+style = "conventional"
+subject_capitalized = false
+imperative_subject = false
+subject_length = 72
+merge_commit = true

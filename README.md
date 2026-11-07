@@ -1,0 +1,157 @@
+# RustDesk Windows agent — initial reconciliation slice
+
+This is an incomplete, non-deployable MVP slice. It contains a strict desired-state parser and tested reconciliation logic with an abstract settings interface. It has no service, HTTP client, credential provisioning, persistence, RustDesk adapter, or backend. It performs no changes to machines. See [plan](docs/plan.md) and [proposed contract](docs/contract.md) for evidence, remaining milestones, and rollout gates.
+
+## Repository layout
+
+```text
+Cargo.toml          Single Rust library crate: rustdesk-agent
+Cargo.lock          Locked dependencies; keep this tracked
+src/lib.rs          Desired-state parsing, reconciliation and backoff
+tests/reconcile.rs  Tests using an in-memory settings adapter
+docs/plan.md        Design, evidence, milestones and validation gates
+docs/contract.md    Proposed management endpoint contract
+.github/workflows/ci.yml  Windows checks, dependency audit, opt-in releases
+.githooks/         Local formatting and commit-message checks
+committed.toml     Commit-message policy
+release.config.mjs Semantic-release branches and plugins
+renovate.json      Dependency and action update configuration
+deny.toml          Dependency policy
+.editorconfig      Editor whitespace defaults
+```
+
+## Development
+
+Install Rust through rustup. The repository selects Rust 1.99.1 with rustfmt and
+Clippy through `rust-toolchain.toml`. Windows builds require the MSVC C++ build
+tools and Windows SDK. From this directory:
+
+```sh
+cargo fmt --check
+cargo clippy --locked --all-targets -- -D warnings
+cargo test --locked
+cargo build --locked
+```
+
+For a Windows x64 compile check:
+
+```sh
+rustup target add x86_64-pc-windows-msvc
+cargo check --locked --target x86_64-pc-windows-msvc
+```
+
+Add `--offline` to Cargo commands when dependencies are cached. A cross-target
+check does not run Windows tests or establish service/UAC behavior. The core can
+be tested on the development host; the eventual agent targets Windows x64 only.
+
+The repository starts on `main`. Use short-lived branches for subsequent changes.
+There is no deployment automation or remote repository configured by this setup.
+
+Dependency updates use Renovate (`renovate.json`): routine Cargo and GitHub Actions
+updates are grouped separately, with automatic merging disabled. Enable Renovate
+on the remote repository after hosting is configured; local configuration alone
+does not activate the bot.
+
+## CI
+
+One GitHub Actions job runs formatting, Clippy, tests and a build on Windows x64
+for pull requests and pushes to `main` and `alpha`. It uses the repository's pinned toolchain
+and lockfile, using `actions-rust-lang/setup-rust-toolchain`. It can also be
+started manually. Actions are pinned to full commit SHAs. Release automation is
+opt-in, as described below. No kiosk deployment is configured. Hosted checks do not validate RustDesk service behavior or UAC.
+
+A separate Linux CI job runs cargo-deny (its action uses Docker) to check the
+locked dependency graph for advisories, licenses and unapproved sources. This
+checks dependencies for all targets, including Windows; it does not add Linux
+agent support. No advisories are ignored. The license policy allows MIT,
+Apache-2.0 and Unicode-3.0 dependencies; the unpublished application itself is
+excluded from license checks until a distribution license is selected.
+
+Run the same checks locally:
+
+```sh
+cargo install cargo-deny --version 0.20.2 --locked
+cargo deny --locked --all-features check
+```
+
+The audit needs network access to refresh advisory data. cargo-deny passed
+locally on 2026-11-07. CI has not run remotely while the repository remains local.
+
+## Git hooks and releases
+
+Install the commit checker, then enable this repository's hooks:
+
+```sh
+cargo install committed --version 1.1.12 --locked
+git config --local core.hooksPath .githooks
+```
+
+The pre-commit hook checks formatting without rewriting files. The commit-msg
+hook requires Conventional Commits, such as `feat: add polling` or
+`fix: reject stale revisions`. Git for Windows provides the shell for these
+hooks. Commit-message validation runs locally only; CI checks the Rust code and
+dependencies. The checker accepts `feat`, `fix`, `chore`, `docs`, `style`,
+`refactor`, `perf` and `test`; use `chore` for CI changes. Subjects are limited to
+72 characters. Hooks must be enabled in each clone and can be bypassed, so review
+the final PR squash message as well.
+
+Use squash merges for feature/fix PRs targeting `alpha`, with a conventional
+squash message. Promote `alpha` into `main` using a merge commit (not squash or
+rebase) to preserve release history. Merge stable fixes back into `alpha` the same
+way. Merge commits still need a conventional subject, for example
+`chore: promote alpha to stable`; replace Git's default merge message. To disable local hooks:
+`git config --local --unset core.hooksPath`.
+
+## Releases
+
+semantic-release runs after checks on pushes to `alpha`
+and `main`, only when repository variable `RELEASE_ENABLED=true`. Merging a
+release-worthy change publishes directly; there is no release PR. `alpha` creates
+GitHub prereleases, and `main` creates stable releases. No npm or crates.io package
+is published, and there is no executable artifact or deployment yet.
+
+With no prior release tags, semantic-release starts at `1.0.0-alpha.1` on `alpha`
+and `1.0.0` on `main`. The checked-in `0.0.0-development` Cargo version is a development
+placeholder, not a version seed for semantic-release. Version selection follows
+Git history using semantic-release's default parser: `fix:` and `perf:` bump patch,
+`feat:` bumps minor, and a `BREAKING CHANGE:` footer bumps major. Use that footer
+for breaking changes; `!` in the subject alone is not recognized by the default
+parser. Alpha releases receive a prerelease counter. No artificial baseline tags
+are created by setup.
+
+Releases create Git tags and GitHub release notes without modifying Cargo.toml,
+Cargo.lock or branch commits. The tag points to the commit that passed CI. The
+Cargo version remains a development placeholder; tags and GitHub Releases identify
+released versions. No generated CHANGELOG.md is committed. When executable
+packaging is implemented, its displayed version can be supplied during the CI
+build without committing version changes back to either branch.
+
+Releases run through the SHA-pinned `cycjimmy/semantic-release-action`. The action
+provides its own Node runtime and installs the latest semantic-release by default.
+No local Node installation, package.json, npm lockfile or custom release scripts
+are needed. `release.config.mjs` explicitly selects GitHub-only plugins; the npm
+publishing plugin is excluded. Renovate maintains the action pin. Release-tool
+transitive dependencies are managed by the action rather than a repository lockfile;
+there is no repository-level npm audit job.
+
+When connecting GitHub:
+
+1. Publish both `main` and `alpha`, and use `alpha` as the development PR target.
+   Allow squash and merge commits; protect both branches with CI checks.
+2. The release identity needs contents-write access for tags and GitHub releases.
+   It does not need to push version commits or bypass branch protection for them.
+   The default `GITHUB_TOKEN` is used unless a scoped `RELEASE_TOKEN` is supplied.
+   Tag rules must allow the release identity to create release tags. No PR/issue
+   comments or issue creation are enabled.
+3. Set `RELEASE_ENABLED=true` only when ready to publish. To pause publishing,
+   remove the variable or set it to `false`. PR and manual workflow runs never
+   publish. Enabling releases applies to both release branches: keep unfinished
+   work on `alpha` until stable promotion is intended.
+
+No credentials, remote settings, published tags or releases are created by local
+setup. Existing released versions must never be retagged; release a new fix instead.
+GitHub execution and protected-branch permissions need validation after hosting.
+
+References: [committed](https://github.com/crate-ci/committed),
+[semantic-release branches](https://semantic-release.org/foundation/workflow-configuration/),
+[why release commits are discouraged](https://semantic-release.org/support/faq/#making-commits-during-the-release-process-adds-significant-complexity).
