@@ -15,4 +15,8 @@ jsonschema = { version = "0.60", default-features = false }
 rcgen = { version = "0.14", default-features = false, features = ["ring"] }
 reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "json"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "process", "io-util", "sync"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-service = "0.8"
+tokio = { version = "1", features = ["rt", "process", "io-util", "time", "sync", "macros"] }

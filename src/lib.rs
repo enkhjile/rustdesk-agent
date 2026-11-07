@@ -194,3 +194,8 @@ pub fn reconcile(io: &mut impl SettingsIo, desired: &DesiredState) -> Report {
 pub fn backoff_seconds(failures: u32) -> u64 {
     5u64.saturating_mul(1u64 << failures.min(6)).min(300)
 }
+
+pub mod detection;
+
+#[cfg(any(windows, test))]
+pub mod probe;
