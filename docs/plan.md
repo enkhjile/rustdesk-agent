@@ -21,8 +21,11 @@ Scope: Windows x64 companion service, no production server changes or RustDesk m
    credentials, device isolation, immutable revisions, report ordering and TLS.
    Exit: contract/schema tests pass. A production backend or Console extension
    remains separate work; the existing Console API does not supply these routes.
-4. **Windows service and enrollment (pending; account depends on milestone 1).**
-   Implement SCM start/stop and administrator-only local provisioning. Generate
+4. **Windows service and enrollment (skeleton implemented; runtime unverified).**
+   The [read-only service](windows-service.md) handles SCM lifecycle and local
+   diagnostic snapshots. Enrollment, identity and credential protection remain
+   pending; the account decision depends on milestone 1.
+   Complete administrator-only local provisioning. Generate
    the UUID once per enrolled machine; do not bake identity or credentials into
    cloned images. Protect credentials with DPAPI and restrictive ACLs for the
    selected service identity and administrators. Do not choose DPAPI scope until
@@ -44,13 +47,15 @@ Scope: Windows x64 companion service, no production server changes or RustDesk m
 
 Keep one crate and add each module only when its milestone begins. The revision guard is implemented in memory; durable restart protection remains
 in milestone 5. The Windows probe is the prerequisite
-for selecting an account and enabling the adapter. No production changes,
+for validating an account and enabling writes. Service skeleton development can
+proceed from source evidence with runtime behavior explicitly unverified. No production changes,
 credential changes or deployment are part of these implementation milestones.
 
 ## Implementation and validation status
 
 Implemented: one library crate with desired-state parsing, per-setting
-reconciliation, report serialization and a capped backoff helper. Seventeen tests
+reconciliation, report serialization and a capped backoff helper. A Windows service
+skeleton and read-only detector now provide local snapshots; see [usage and limits](windows-service.md). Seventeen reconciliation tests
 cover rejection (including explicit null and duplicate keys), successful
 reconciliation, drift at the same revision, partial results, read/write failures,
 failed post-write readback, mismatched readback, invalid directly constructed
@@ -59,12 +64,13 @@ and retention of accepted revisions after application failure. See the [contract
 
 Repository tooling is configured: pinned Rust, Windows CI, cargo-deny policy,
 Renovate, local hooks and automatic semantic-release. The local cargo-deny audit passed on 2026-11-07.
-No remote CI or Windows service/UAC canary has been completed. The remaining gates below are
+PR #1 passed hosted Windows x64 checks and dependency checks before merging.
+Actual Windows service/UAC canary testing has not been completed. The remaining gates below are
 planned validation, not a record of passing tests.
 
 ## Design and alternatives
 
-Use one-way desired state with per-setting read/apply/readback. A standalone service can be deployed and rolled back independently of the kiosk UI. Embedding the loop into setup-tools would couple background operation to an interactive installer. Direct TOML edits and a RustDesk fork are excluded. The first deliverable is the pure reconciliation core; no executable agent, production backend or usable credentials are provided yet. No permanent password is accepted: RustDesk 1.4.7 CLI uses a process argument and a secure delivery/handling path is not established.
+Use one-way desired state with per-setting read/apply/readback. A standalone service can be deployed and rolled back independently of the kiosk UI. Embedding the loop into setup-tools would couple background operation to an interactive installer. Direct TOML edits and a RustDesk fork are excluded. The first deliverable is the pure reconciliation core; a development executable now provides read-only detection and an SCM skeleton. No production backend or enrolled credentials are provided. No permanent password is accepted: RustDesk 1.4.7 CLI uses a process argument and a secure delivery/handling path is not established.
 
 Revision numbers are monotonically increasing per device. Reject stale revisions and reject reused revision with a different payload in the service/backend. Reconcile periodically even at the same revision to detect drift; report applied revision only when every requested value has been observed after application. Partial changes remain partial and are retried; no automatic rollback is implied. The core deliberately has no shell or generic command interface. The platform must authenticate the request before parsing state, enforce HTTPS, and bind UUID to the credential rather than trusting a caller-provided ID.
 
@@ -111,7 +117,7 @@ RustDesk 1.4.7 source implements `--get-id`, `--option key` read, and `--option 
 Keep a single crate. Existing `src/lib.rs` owns the portable allowlist and
 reconciliation; `tests/reconcile.rs` exercises behavior. `docs/schemas/` defines
 the proposed wire contract. Add modules only as their milestone is implemented:
-`src/management.rs` for HTTPS and revision handling, `src/windows/` for SCM,
-credential storage and RustDesk CLI integration, and `src/main.rs` for
-the Windows executable. Keep the test backend separate from the installed agent.
+`src/management.rs` for HTTPS and revision handling, `src/windows/` now holds SCM lifecycle, `src/probe.rs` the bounded read-only
+CLI runner, and `src/main.rs` the Windows entry point. Credential storage and
+management integration remain pending. Keep the test backend separate from the installed agent.
 No empty modules or extra workspace crates are needed now.
