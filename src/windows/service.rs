@@ -99,6 +99,11 @@ fn run(
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
+    let enrollment = match rustdesk_agent::credentials::load() {
+        Ok(value) => Some(value.info()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => return Err(error.into()),
+    };
     publish(handle, ServiceState::Running, false)?;
     let (executable, report_path) = CONFIG.get().ok_or("missing service configuration")?;
     runtime.block_on(async {
@@ -112,6 +117,7 @@ fn run(
             let snapshot = serde_json::json!({
                 "observed_at_unix_seconds": SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
                 "detection": detection,
+                "enrollment": enrollment,
             });
             // A diagnostic snapshot only, never revision state or an applied report.
             std::fs::write(report_path, serde_json::to_vec_pretty(&snapshot)?)?;

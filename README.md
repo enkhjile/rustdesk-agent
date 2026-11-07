@@ -1,6 +1,6 @@
 # RustDesk Windows agent — development slices
 
-This is an incomplete, non-deployable Windows x64 agent. It contains a strict desired-state parser, an in-memory revision guard, a read-only RustDesk detector and a Windows Service skeleton. The service writes local diagnostic snapshots only; it does not apply settings. Enrollment, secure credentials, persistence, management HTTP polling and the write adapter remain unimplemented. See [Windows usage and limits](docs/windows-service.md), [plan](docs/plan.md), and [contract fixture](docs/contract-testing.md).
+This is an incomplete, non-deployable Windows x64 agent. It contains a strict desired-state parser, an in-memory revision guard, a read-only RustDesk detector and a Windows Service skeleton. The service writes local diagnostic snapshots only; it does not apply settings. Local [enrollment and credential storage](docs/enrollment.md) use machine-scoped DPAPI plus restrictive ACLs; Windows runtime validation is pending. Server registration, durable revision/report state, management HTTP polling and the write adapter remain unimplemented. See [Windows usage and limits](docs/windows-service.md), [plan](docs/plan.md), and [contract fixture](docs/contract-testing.md).
 
 ## Repository layout
 
@@ -10,7 +10,8 @@ Cargo.lock          Locked dependencies; keep this tracked
 src/lib.rs          Desired-state parsing, reconciliation and backoff
 src/detection.rs    Read-only query allowlist and output parsing
 src/probe.rs        Bounded CLI process runner
-src/windows/       Windows SCM lifecycle
+src/windows/       Windows SCM lifecycle and protected enrollment storage
+src/enrollment.rs   Validated device identity, origin and credential record
 tests/reconcile.rs  Tests using an in-memory settings adapter
 docs/plan.md        Design, evidence, milestones and validation gates
 docs/contract.md    Management endpoint contract (test backend only)
