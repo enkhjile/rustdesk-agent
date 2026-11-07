@@ -45,7 +45,7 @@ administrator-controlled absolute paths; quote all paths):
 "C:\Program Files\RustDeskAgent\rustdesk-agent.exe" --service "C:\Program Files\RustDesk\rustdesk.exe" "C:\ProgramData\RustDeskAgent\detection.json"
 ```
 
-Provision the report directory first. Its ACL must permit the chosen service
+The report path must be absolute and end in `.json`. Provision its directory first. Its ACL must permit the chosen service
 account to write while excluding untrusted writers; protect the executable and
 SCM configuration too. The skeleton does not set or verify these ACLs. Installation
 is an administrator action, outside this implementation; no installation commands
@@ -53,8 +53,10 @@ have been run. Do not rely on an installer/SCM default that silently selects
 LocalSystem. The service account remains an explicit deployment decision.
 
 The service probes immediately and then waits 60 seconds between snapshots.
-STOP or SHUTDOWN interrupts the wait or active probe; an active CLI child is
-killed when its probe is cancelled. SCM receives pending/running/stopped status.
+STOP or SHUTDOWN interrupts the wait or active probe; cancellation requests
+termination of the direct CLI child. Descendant processes are not managed by
+a Windows Job Object in this skeleton. Snapshot-file writes are synchronous
+and must finish before a pending stop can be handled; use a local report directory. SCM receives pending/running/stopped status.
 Fatal runtime/report-write errors stop the service with service-specific code 1.
 Detection failures are recorded and retried on the next cycle. The JSON file
 contains a timestamp and detection results; it is overwritten, not an audit log

@@ -1,6 +1,6 @@
 use std::{
     ffi::OsString,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::OnceLock,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -19,9 +19,18 @@ const NAME: &str = "RustDeskAgent";
 static CONFIG: OnceLock<(PathBuf, PathBuf)> = OnceLock::new();
 define_windows_service!(ffi_service_main, service_main);
 
+fn is_report_path(path: &Path) -> bool {
+    path.is_absolute()
+        && path
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
+}
+
 pub fn dispatch(executable: PathBuf, report: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
-    if !executable.is_absolute() || !report.is_absolute() || report == executable {
-        return Err("Use distinct absolute executable and report paths".into());
+    if !executable.is_absolute() || !is_report_path(&report) || report == executable {
+        return Err(
+            "Use an absolute executable path and a distinct absolute .json report path".into(),
+        );
     }
     if !report.parent().is_some_and(|p| p.is_dir()) {
         return Err("Report directory must already exist and be administrator-protected".into());
@@ -114,4 +123,26 @@ fn run(
         }
         Ok(())
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn report_must_be_an_absolute_json_path() {
+        assert!(is_report_path(Path::new(
+            r"C:\ProgramData\RustDeskAgent\detection.json"
+        )));
+        assert!(is_report_path(Path::new(
+            r"C:\ProgramData\RustDeskAgent\detection.JSON"
+        )));
+        for path in [
+            r"detection.json",
+            r"C:\Program Files\RustDesk\RUSTDESK.EXE",
+            r"C:\ProgramData\RustDeskAgent\report",
+        ] {
+            assert!(!is_report_path(Path::new(path)));
+        }
+    }
 }
