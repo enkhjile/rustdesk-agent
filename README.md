@@ -1,6 +1,6 @@
 # RustDesk Windows agent — initial reconciliation slice
 
-This is an incomplete, non-deployable MVP slice. It contains a strict desired-state parser and tested reconciliation logic with an abstract settings interface. It has no service, HTTP client, credential provisioning, persistence, RustDesk adapter, or backend. It performs no changes to machines. See [plan](docs/plan.md) and [proposed contract](docs/contract.md) for evidence, remaining milestones, and rollout gates.
+This is an incomplete, non-deployable MVP slice. It contains a strict desired-state parser, an in-memory revision guard and tested reconciliation logic with an abstract settings interface. It has no service, HTTP client, credential provisioning, persistence, RustDesk adapter, or production backend. A separate loopback HTTPS [contract test fixture](docs/contract-testing.md) exercises the proposed API. It performs no changes to machines. See [plan](docs/plan.md) and [proposed contract](docs/contract.md) for evidence, remaining milestones, and rollout gates.
 
 ## Repository layout
 
@@ -10,7 +10,9 @@ Cargo.lock          Locked dependencies; keep this tracked
 src/lib.rs          Desired-state parsing, reconciliation and backoff
 tests/reconcile.rs  Tests using an in-memory settings adapter
 docs/plan.md        Design, evidence, milestones and validation gates
-docs/contract.md    Proposed management endpoint contract
+docs/contract.md    Management endpoint contract (test backend only)
+tests/contract_backend.rs  HTTPS contract tests
+tests/support/     In-memory Rust test backend
 .github/workflows/ci.yml  Windows checks, dependency audit, automatic releases
 .githooks/         Local formatting and commit-message checks
 committed.toml     Commit-message policy
@@ -58,7 +60,8 @@ does not activate the bot.
 One GitHub Actions job runs formatting, Clippy, tests and a build on Windows x64
 for pull requests and pushes to `main` and `alpha`. It uses the repository's pinned toolchain
 and lockfile, using `actions-rust-lang/setup-rust-toolchain`. It can also be
-started manually. Actions are pinned to full commit SHAs. Release automation runs after checks, as described below. No kiosk deployment is configured. Hosted checks do not validate RustDesk service behavior or UAC.
+started manually. The Rust test suite includes the loopback HTTPS contract tests;
+no separate runtime or certificate tool is required. Actions are pinned to full commit SHAs. Release automation runs after checks, as described below. No kiosk deployment is configured. Hosted checks do not validate RustDesk service behavior or UAC.
 
 A separate Linux CI job runs cargo-deny (its action uses Docker) to check the
 locked dependency graph for advisories, licenses and unapproved sources. This
