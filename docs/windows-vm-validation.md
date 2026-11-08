@@ -115,7 +115,7 @@ both the agent service and endpoint task.
 Executable SHA-256, independently read inside the guest:
 `6E11A0A2FEF767B2DF3E74A572238565743C5F1BBAB3C54341D56D50075E7A2C`.
 
-## Pending checks and retained artifacts
+## Ordinary-user checks and retained artifacts
 
 Ordinary-user file-access checks completed at `19:18:06+09:00`. The harness used
 `LogonUserW` (batch logon, type 4), then `WindowsIdentity.Impersonate` and the same
@@ -132,14 +132,56 @@ and SHA-256 of `state.json` before and after was identical:
 cmd.exe /c 'C:\Lab\rustdesk-agent.exe --init-state > C:\Lab\Results\repeat-init.stdout 2> C:\Lab\Results\repeat-init.stderr'
 ```
 
-The separate ordinary-user `--init-state` CLI check remains unverified. Scheduled
-task attempts first failed with missing batch-logon rights (Win32 1385), then
-queued without launching after a guest-only grant preserving existing rights.
-An S4U task registration was denied. `CreateProcessWithTokenW` attempts failed
-during process initialization (`0xC0000142`; the console-free .NET helper also
-returned `0x8007045A`), before producing probe output. These are harness failures,
-not evidence of agent rejection or success. Direct token impersonation resolved
-the file-access check without treating any failed launch as a passing test.
+The ordinary-user `--init-state` CLI check passed at `19:40:57+09:00` using
+[the retained manual harness](../tests/manual/user-init.ps1). It runs a temporary
+SCM helper as `RDAGENT-LAB\LabUser`, which starts the actual agent executable with
+`--init-state` and redirected stdout/stderr. The recorded token included Users
+and Service, with `administrator=False`, and no agent service SID. Results:
+
+```text
+account=RDAGENT-LAB\LabUser
+administrator=False
+exit=1
+stdout=
+stderr=Error: Custom { kind: PermissionDenied, error: "run enrollment as an elevated administrator" }
+PASS: ordinary-user CLI rejected; state hash and ACL unchanged
+[SC] DeleteService SUCCESS
+```
+
+This proves rejection by the agent's administrator check under an ordinary-user
+service logon. It does not claim an interactive desktop logon test. No agent code
+change was needed. The temporary service was removed, and the original
+`SeServiceLogonRight` assignment was restored. The helper has no credentials
+embedded in its source; the guest-only runner supplied the existing dummy
+credential as a `PSCredential`.
+
+The earlier scheduled-task attempts failed or remained queued; direct
+`CreateProcessWithTokenW` children failed during initialization (`0xC0000142` or
+`0x8007045A`). Using a normal SCM-created user session bypassed that failing launch
+path. The precise cause of those initialization failures was not established.
+An initial service-logon policy attempt also failed; diagnostic output was added,
+and the subsequent run completed. These harness failures are not agent failures.
+
+To reproduce in the already provisioned disposable guest, copy the manual script
+there, then run in elevated PowerShell (archive previous probe output first):
+
+```powershell
+$dummy = Get-Credential 'RDAGENT-LAB\LabUser'
+& C:\Lab\user-init.ps1 -Credential $dummy
+```
+
+Prerequisites are the existing lab account, executable, enrolled/initialized
+state, endpoint task and `C:\Lab\Results` writable by LabUser. The script refuses
+other machine/account names and an existing helper service or result file. It
+stops the agent and endpoint before testing, grants only temporary service-logon
+rights, captures real CLI output, and checks the state hash and ACL. It is manual
+lab tooling, not an installer or part of the shipped agent.
+
+For this follow-up, pinned-toolchain formatting, Clippy and Windows x64 build
+passed again. All 49 non-administrator tests passed outside the network sandbox;
+the sandbox itself blocked loopback HTTPS. The two administrator-only tests
+retain the earlier passing guest results above; they were not rerun in this
+follow-up. The new manual harness compiled and passed inside the guest.
 
 Host scripts and raw transcripts remain under `target\validation\`; guest tools
 and logs are under `C:\Lab`. These local harness files are not shipped agent
