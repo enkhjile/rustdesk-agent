@@ -25,17 +25,30 @@ The only child commands are `--version`, `--get-id`, `--option approve-mode` and
 `--option verification-method`. Version is queried first; only exact `1.4.7`
 continues to the other queries. Other versions are not automatically trusted.
 Each command has a three-second timeout and a 4 KiB limit on each output stream.
-Nonzero exits, nonempty stderr, malformed/blank output and timeouts are reported
+Nonzero exits, nonempty stderr, malformed output and timeouts are reported
 without including raw command output in diagnostics. A missing executable is
 reported as unavailable. Later fields are `unsupported_version` whenever the
 version gate fails, including when version detection itself failed.
 
-`observed` means output matched the expected format, not that live state was
-verified. `live_state_verified` is always false. RustDesk can fall back to cached
+For version and ID, `observed` means output matched the expected format, not that
+live state was verified. Settings use `unverified_cli_value` with the allowlisted
+value when nonblank, or `ambiguous_default` without a value when blank. Empty
+version/ID output remains `invalid_output`. No default value is inferred from
+blank option output. `live_state_verified` is always false. These local diagnostic
+statuses do not change management reports: results remain `unsupported` and
+applied revision remains null. RustDesk can fall back to cached
 configuration during IPC failures; even its getter commands can update local
 caches internally. The agent issues no modifying CLI commands and never edits
 RustDesk TOML. Selecting a password verification mode and delivering a permanent
 password are separate operations; neither is implemented in this slice.
+
+A separate direct IPC reader is not a supported workaround for 1.4.7: the
+[Windows main IPC authorization](https://github.com/rustdesk/rustdesk/blob/1.4.7/src/ipc/auth.rs#L660)
+requires the peer executable to match RustDesk, while the
+[CLI options reader](https://github.com/rustdesk/rustdesk/blob/1.4.7/src/ipc.rs#L1721)
+hides connection failures behind cache fallback. Reliable live reads require an
+upstream read interface that exposes failure/provenance; the agent does not
+impersonate RustDesk, inject code or treat cache/TOML values as live settings.
 
 ## Service entry point
 
