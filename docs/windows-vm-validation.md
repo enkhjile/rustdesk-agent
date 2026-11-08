@@ -143,8 +143,7 @@ the file-access check without treating any failed launch as a passing test.
 
 Host scripts and raw transcripts remain under `target\validation\`; guest tools
 and logs are under `C:\Lab`. These local harness files are not shipped agent
-features. The VM remains
-isolated and running; the agent and endpoint were stopped after reboot validation. No production
+features. Final cleanup ran `Stop-VM -Name RustDeskAgent-Validation` after checking that it still had no network adapters. Hyper-V confirmed its state was `Off`. The agent and endpoint had already been stopped after reboot validation. No production
 endpoint, real credential, RustDesk write, merge or release was involved.
 
 Remaining separate gates include installed RustDesk getter/IPC behavior and stop
