@@ -124,7 +124,11 @@ but returned `267011` (`0x41303`, not yet run) and produced no probe output with
 20 seconds. That is a harness prerequisite failure, not evidence of user access
 or denial. Diagnostics identified task logon failure `2147943785` (Win32
 1385): the fresh dummy account lacked batch-logon rights. A guest-only grant of
-`SeBatchLogonRight` is prepared. Ordinary-user access and repeated/ordinary-user
+`SeBatchLogonRight` was applied while retaining existing assignments. The next
+attempt still queued the task without launching its action (scheduler event 325).
+Even after a further 45-second output wait, no probe file existed. Its reported
+LastTaskResult of 0 is not evidence of execution or a pass. A limited S4U task
+is the next harness attempt. Ordinary-user access and repeated/ordinary-user
 initialization are still pending; the HTTP/reboot results above are complete.
 
 Host scripts and raw transcripts remain under `target\validation\`; guest tools

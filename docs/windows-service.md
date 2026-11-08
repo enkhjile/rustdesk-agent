@@ -101,8 +101,8 @@ To stop polling, stop the agent service. Do not delete enrollment as a toggle.
 RustDesk 1.4.7's `--option` path requires installation and administrative privilege.
 A LocalService probe is therefore expected to report invalid output for option
 reads. An elevated administrator passes the source-level privilege check;
-LocalSystem specifically is not required by that check. No working unattended
-account or prompt-free runtime behavior has yet been demonstrated.
+LocalSystem specifically is not required by that check. The isolated VM demonstrated prompt-free LocalService polling with RustDesk absent.
+An account that can read installed RustDesk options remains unverified.
 
 ## Validation still required on disposable Windows
 
@@ -129,7 +129,8 @@ retries and guest reboot. Its pending section identifies the checks still outsta
 Local verification: portable parser/process and HTTPS polling tests. The polling
 slice adds a TLS dependency that requires Windows C headers, so the macOS
 cross-target check cannot complete without the Windows SDK; use hosted Windows CI.
-Actual Windows service/UAC and RustDesk runtime tests are pending.
+Actual read-only service/UAC results are recorded in the isolated VM report;
+installed RustDesk runtime tests remain pending.
 
 Sources: [RustDesk 1.4.7 CLI](https://github.com/rustdesk/rustdesk/blob/1.4.7/src/core_main.rs),
 [IPC fallback/write behavior](https://github.com/rustdesk/rustdesk/blob/1.4.7/src/ipc.rs#L1664-L1697),
