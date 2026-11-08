@@ -23,6 +23,10 @@ impl Query {
 #[serde(tag = "status", content = "value", rename_all = "snake_case")]
 pub enum Observation {
     Observed(String),
+    /// A valid setting value printed by the CLI, which may come from its cache.
+    UnverifiedCliValue(String),
+    /// Empty option output cannot distinguish an unset default from IPC failure.
+    AmbiguousDefault,
     Unavailable,
     CommandFailed,
     InvalidOutput,
@@ -39,6 +43,10 @@ pub fn parse_observation(query: Query, success: bool, stdout: &[u8], stderr: &[u
         return Observation::InvalidOutput;
     };
     let value = value.trim();
+    let setting = matches!(query, Query::ApproveMode | Query::VerificationMethod);
+    if setting && value.is_empty() {
+        return Observation::AmbiguousDefault;
+    }
     let valid = match query {
         Query::Version => {
             let parts: Vec<_> = value.split('.').collect();
@@ -60,7 +68,9 @@ pub fn parse_observation(query: Query, success: bool, stdout: &[u8], stderr: &[u
             "use-temporary-password" | "use-permanent-password" | "use-both-passwords"
         ),
     };
-    if valid {
+    if valid && setting {
+        Observation::UnverifiedCliValue(value.to_owned())
+    } else if valid {
         Observation::Observed(value.to_owned())
     } else {
         Observation::InvalidOutput
