@@ -106,6 +106,11 @@ account or prompt-free runtime behavior has yet been demonstrated.
 
 ## Validation still required on disposable Windows
 
+The [2026-11-08 validation record](windows-validation-2026-11-08.md) records local
+Windows build/test results and the non-elevated storage-test failures. The host
+reported physical Dell hardware; service installation and reboot testing were
+therefore deferred to an isolated disposable VM.
+
 - Run `--detect` with RustDesk absent, installed 1.4.7, a different version and
   the RustDesk service stopped. Compare reported ID/settings to the actual UI.
 - Install under an explicitly selected test account; start, stop during a probe,
