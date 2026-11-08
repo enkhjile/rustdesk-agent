@@ -81,6 +81,31 @@ server was deployed. See [contract testing](contract-testing.md).
 
 ## Remaining gates on an isolated disposable VM
 
+### VM setup follow-up (same day)
+
+The user subsequently authorized creation of an isolated VM. Hyper-V is installed;
+the host has approximately 32 GiB RAM and had 171 GB free on C:. The existing ISO
+`C:\Users\user\Downloads\Win11_25H2_Japanese_x64.iso` contains Windows 11 Pro at
+image index 3. An elevated setup applied that image to a new 64 GiB dynamic VHDX
+and created `RustDeskAgent-Validation`: generation 2, 8 GiB RAM, four virtual CPUs,
+vTPM, and **no network adapter**. No existing VM was replaced.
+
+Setup is incomplete. Host-side `bcdboot G:\Windows /s F: /f UEFI /c /v`, targeting
+only the mounted lab disk, failed with exit 183 / `c0000035` while opening the
+lab BCD hive as `BCD00000000`. The host BCD was not repaired or unloaded. A separate
+2 GiB Windows PE repair disk was prepared to perform boot setup inside the guest.
+Mounting its copied `boot.wim` for modification failed because the copy retained
+the ISO's read-only attribute. The resume script now clears that attribute, but
+Windows canceled the subsequent UAC launch before this correction could run.
+
+The VM has not booted and no guest service test has run. Host-local scripts and
+logs are retained under `target\validation\`; they are ignored build/lab artifacts,
+not tested repository tooling. `repair-in-vm.ps1` is the pending elevated resume
+step. The draft `validate-guest.ps1` sequences guest tests only after a successful
+boot. The host ISO and lab repair disk may remain mounted from the interrupted
+setup. Next work must inspect their current state before resuming; do not recreate
+or overwrite the existing lab disks. Windows UAC approval is still required.
+
 All of the following remain **unexecuted**, including previously reported hosted
 storage tests as local elevated validation:
 
