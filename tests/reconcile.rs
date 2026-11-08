@@ -267,3 +267,20 @@ fn invalid_first_revision_does_not_initialize_guard() {
     assert!(guard.accepted().is_none());
     assert!(guard.reconcile(&mut fake(), &desired()).is_ok());
 }
+
+#[test]
+fn revision_can_be_accepted_without_a_settings_adapter() {
+    let mut guard = RevisionGuard::default();
+    let state = desired();
+    assert_eq!(guard.accept(&state), Ok(()));
+    assert_eq!(guard.accept(&state), Ok(()));
+    let mut changed = state.clone();
+    changed.revision -= 1;
+    assert_eq!(guard.accept(&changed), Err("stale_revision"));
+    changed = state.clone();
+    changed.settings.approve_mode = Some(ApproveMode::Click);
+    assert_eq!(guard.accept(&changed), Err("revision_conflict"));
+    changed.revision = 0;
+    assert_eq!(guard.accept(&changed), Err("invalid_state"));
+    assert_eq!(guard.accepted(), Some(&state));
+}

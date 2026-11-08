@@ -43,6 +43,7 @@ struct Results {
 }
 
 struct Backend {
+    response: Option<(StatusCode, HeaderMap, Vec<u8>)>,
     desired: BTreeMap<String, (DesiredState, Value)>,
     latest: BTreeMap<String, Value>,
     desired_schema: jsonschema::Validator,
@@ -56,7 +57,7 @@ fn schema(source: &str) -> jsonschema::Validator {
 }
 fn authenticate(headers: &HeaderMap) -> Result<&'static str, StatusCode> {
     match headers.get("authorization").and_then(|h| h.to_str().ok()) {
-        Some("Bearer test-a") => Ok(A),
+        Some("Bearer test-a" | "Bearer disposable-test-credential-device-a") => Ok(A),
         Some("Bearer test-b") => Ok(B),
         _ => Err(StatusCode::UNAUTHORIZED),
     }
@@ -67,6 +68,14 @@ async fn desired(
 ) -> Result<Response, StatusCode> {
     let device = authenticate(&headers)?;
     let backend = backend.lock().unwrap();
+    if let Some(response) = &backend.response {
+        let (mut parts, body) = response.clone().into_response().into_parts();
+        parts.headers.remove("content-length");
+        return Ok(Response::from_parts(
+            parts,
+            axum::body::Body::from_stream(body.into_data_stream()),
+        ));
+    }
     Ok(match backend.desired.get(device) {
         Some((_, value)) => Json(value.clone()).into_response(),
         None => StatusCode::NO_CONTENT.into_response(),
@@ -123,6 +132,8 @@ async fn status(
 pub struct Fixture {
     pub url: String,
     pub client: reqwest::Client,
+    #[allow(dead_code)]
+    pub certificate: reqwest::Certificate,
     backend: Shared,
     handle: axum_server::Handle<std::net::SocketAddr>,
     task: tokio::task::JoinHandle<()>,
@@ -146,6 +157,7 @@ impl Fixture {
             .build()
             .unwrap();
         let backend = Arc::new(Mutex::new(Backend {
+            response: None,
             desired: BTreeMap::new(),
             latest: BTreeMap::new(),
             desired_schema: schema(include_str!("../../docs/schemas/desired-state.schema.json")),
@@ -172,10 +184,16 @@ impl Fixture {
         Self {
             url: format!("https://{address}"),
             client,
+            certificate: reqwest::Certificate::from_der(&der).unwrap(),
             backend,
             handle,
             task,
         }
+    }
+    /// Fault injection for the agent HTTP client tests only.
+    #[allow(dead_code)]
+    pub fn respond(&self, status: StatusCode, headers: HeaderMap, body: Vec<u8>) {
+        self.backend.lock().unwrap().response = Some((status, headers, body));
     }
     pub fn assign(&self, device: &str, value: Value) -> Result<(), &'static str> {
         let state = parse_desired(&serde_json::to_vec(&value).unwrap())?;

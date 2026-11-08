@@ -42,7 +42,7 @@ impl Enrollment {
         value.validate()?;
         Ok(value)
     }
-    fn validate(&self) -> Result<(), &'static str> {
+    pub(crate) fn validate(&self) -> Result<(), &'static str> {
         let origin = &self.management_origin;
         if self.schema_version != 1
             || self.agent_uuid.get_version_num() != 4
@@ -70,6 +70,9 @@ impl Enrollment {
             return Err("invalid_device_credential");
         }
         Ok(())
+    }
+    pub(crate) fn credential(&self) -> &str {
+        &self.credential
     }
     pub fn info(&self) -> EnrollmentInfo {
         EnrollmentInfo {

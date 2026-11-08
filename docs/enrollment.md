@@ -2,7 +2,8 @@
 
 This is a development implementation, not a deployment approval. It provisions
 one device locally; it does not register it with a server, rotate credentials,
-change the service account or enable management polling.
+or change the service account. Once restarted, the service uses valid enrollment
+for read-only management polling; see [service behavior](windows-service.md).
 
 ## Storage design
 
@@ -62,12 +63,13 @@ Debug output redacts the credential. Error messages do not include input values.
    those public fields in snapshots. Restart the service after initial enrollment.
 
 Origins must use HTTPS and contain no userinfo, path beyond `/`, query or fragment.
-The endpoint is only stored in this slice; no connection is made or verified.
+Enrollment itself only stores the endpoint. The service connects after restart;
+enrollment success does not establish endpoint reachability or server authorization.
 Do not clone enrolled machines: UUID and credential belong to one device.
 
 Missing enrollment leaves the current service in read-only diagnostic mode, with
 `enrollment: null`. An existing inaccessible, corrupt or mismatched-policy store
-stops service startup with code 1. Future authenticated polling must require a
+stops service startup with code 1. Authenticated polling requires a
 valid enrollment and must not treat a missing store as permission to regenerate it.
 
 ## Verification
@@ -78,8 +80,9 @@ tamper rejection, protected file creation, repeated-enrollment refusal, identity
 retention and rejection of a mismatched access policy. The storage test requires
 an elevated test runner and uses only random temporary paths and dummy credentials.
 
-Windows x64 compilation can be checked locally. Actual DPAPI/ACL tests, access
-under the configured service SID, denial to an ordinary user and another service,
+Windows x64 builds require the MSVC C++ tools and SDK (including the TLS dependency).
+PR #3 passed hosted Windows tests, including DPAPI round-trip and protected-store
+creation/load checks. Access under the configured service SID, denial to an ordinary user and another service,
 reboot persistence and prompt-free behavior require Windows execution. These
 runtime checks have not been completed locally; do not deploy on compile evidence.
 

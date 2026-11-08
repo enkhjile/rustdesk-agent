@@ -15,17 +15,18 @@ Scope: Windows x64 companion service, no production server changes or RustDesk m
    parsed settings rather than raw JSON. Retain the strict allowlist and readback tests.
    Exit: tests prove invalid state causes no settings I/O, while unchanged
    revisions still repair drift.
-3. **Contract test backend (implemented; local tests only).** A loopback HTTPS fixture
+3. **Contract test backend (implemented; local and hosted Windows tests).** A loopback HTTPS fixture
    in `tests/support/` uses Rust dev-dependencies and JSON Schema validation.
    Six passing local tests in `tests/contract_backend.rs` cover the routes with disposable
    credentials, device isolation, immutable revisions, report ordering and TLS.
    Exit: contract/schema tests pass. A production backend or Console extension
    remains separate work; the existing Console API does not supply these routes.
-4. **Windows service and enrollment (skeleton implemented; runtime unverified).**
+4. **Windows service and enrollment (implemented; service runtime validation pending).**
    The [read-only service](windows-service.md) handles SCM lifecycle and local
    diagnostic snapshots. [Local enrollment](enrollment.md), stable UUID storage and
-   machine-DPAPI protection with service-SID ACLs are implemented; Windows runtime
-   validation and server registration remain pending.
+   machine-DPAPI protection with service-SID ACLs are implemented. PR #3 passed hosted
+   Windows DPAPI/storage tests; actual service-SID access, reboot/UAC validation
+   and server registration remain pending.
    Complete administrator-only local provisioning. Generate
    the UUID once per enrolled machine; do not bake identity or credentials into
    cloned images. Protect credentials with DPAPI and restrictive ACLs for the
@@ -34,9 +35,11 @@ Scope: Windows x64 companion service, no production server changes or RustDesk m
    runtime validation. Exit: Windows x64 build plus service
    restart, non-admin access and no-post-install-UAC tests pass. No RustDesk writes
    in this milestone; LocalSystem only with evidence that it is required.
-5. **Authenticated polling and durable state (pending; needs 2–4).** Add fixed-origin
-   HTTPS, no redirects, certificate validation, bounded bodies/process output,
-   deadlines, stop-aware polling and capped retry with jitter. Persist accepted
+5. **Authenticated polling and durable state (read-only polling implemented; durability pending).**
+   Fixed-origin HTTPS polling now uses enrollment, certificate validation, no redirects,
+   bounded bodies, deadlines, stop-aware service integration, and capped retry with jitter.
+   Acceptance/errors are local diagnostics only; no reconciliation or status delivery.
+   Next, persist accepted
    desired state before settings I/O; retain the latest pending report durably.
    Exit: isolated tests cover restart/crash boundaries, authentication failures,
    stale state, report retries, malformed responses and network outages.
@@ -47,8 +50,8 @@ Scope: Windows x64 companion service, no production server changes or RustDesk m
    connection behavior, reboot persistence and service/UAC tests pass on the
    disposable client before any separately authorized rollout.
 
-Keep one crate and add each module only when its milestone begins. The revision guard is implemented in memory; durable restart protection remains
-in milestone 5. The Windows probe is the prerequisite
+Keep one crate and add each module only when its milestone begins. The revision guard is implemented in memory; durable restart protection and status delivery remain
+in milestone 5. Read-only polling must not be mistaken for applied-state reporting. The Windows probe is the prerequisite
 for validating an account and enabling writes. Service skeleton development can
 proceed from source evidence with runtime behavior explicitly unverified. No production changes,
 credential changes or deployment are part of these implementation milestones.
@@ -57,7 +60,7 @@ credential changes or deployment are part of these implementation milestones.
 
 Implemented: one library crate with desired-state parsing, per-setting
 reconciliation, report serialization and a capped backoff helper. A Windows service
-skeleton and read-only detector now provide local snapshots; see [usage and limits](windows-service.md). Seventeen reconciliation tests
+skeleton and read-only detector now provide local snapshots; see [usage and limits](windows-service.md). Eighteen reconciliation tests
 cover rejection (including explicit null and duplicate keys), successful
 reconciliation, drift at the same revision, partial results, read/write failures,
 failed post-write readback, mismatched readback, invalid directly constructed
@@ -66,7 +69,8 @@ and retention of accepted revisions after application failure. See the [contract
 
 Repository tooling is configured: pinned Rust, Windows CI, cargo-deny policy,
 Renovate, local hooks and automatic semantic-release. The local cargo-deny audit passed on 2026-11-07.
-PR #1 passed hosted Windows x64 checks and dependency checks before merging.
+PRs #1–#3 passed hosted Windows x64 checks and dependency checks before merging;
+`v1.0.0-alpha.3` is published. PR #3 includes passing DPAPI/storage tests.
 Actual Windows service/UAC canary testing has not been completed. The remaining gates below are
 planned validation, not a record of passing tests.
 
@@ -99,8 +103,8 @@ Revision numbers are monotonically increasing per device. Reject stale revisions
 - No enrollment HTTP API or admin UI is needed for the test MVP: provision the
   UUID/credential mapping locally with test data. Production enrollment, rotation
   and revocation operations must be defined before rollout. Secrets never appear
-  in command arguments, logs or status. Define heartbeat/error reporting for
-  unassigned devices before the service milestone; the current status schema
+  in command arguments, logs or status. Use local diagnostic snapshots for unassigned devices and polling errors in this
+  slice; network heartbeat/error reporting remains separate contract work; the current status schema
   only represents a reconciliation attempt with a desired revision.
 
 ## Validation and rollout gates
@@ -119,7 +123,7 @@ RustDesk 1.4.7 source implements `--get-id`, `--option key` read, and `--option 
 Keep a single crate. Existing `src/lib.rs` owns the portable allowlist and
 reconciliation; `tests/reconcile.rs` exercises behavior. `docs/schemas/` defines
 the proposed wire contract. Add modules only as their milestone is implemented:
-`src/management.rs` for HTTPS and revision handling, `src/windows/` now holds SCM lifecycle, `src/probe.rs` the bounded read-only
+`src/management.rs` now handles read-only HTTPS polling and in-memory revision acceptance, `src/windows/` now holds SCM lifecycle, `src/probe.rs` the bounded read-only
 CLI runner, and `src/main.rs` the Windows entry point. Credential storage now lives in `src/windows/credentials.rs` with portable
-validation in `src/enrollment.rs`; management integration remains pending. Keep the test backend separate from the installed agent.
+validation in `src/enrollment.rs`; read-only management polling is integrated. Keep the test backend separate from the installed agent.
 No empty modules or extra workspace crates are needed now.
