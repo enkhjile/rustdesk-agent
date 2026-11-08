@@ -1,0 +1,161 @@
+diff --git a/src/core_main.rs b/src/core_main.rs
+index 2bd6c11..4ef27c6 100644
+--- a/src/core_main.rs
++++ b/src/core_main.rs
+@@ -1,3 +1,36 @@
++#[cfg(windows)]
++#[path = "settings_read.rs"]
++mod settings_read;
++
++#[cfg(windows)]
++fn print_live_settings(args: &[String]) -> ! {
++    use hbb_common::tokio;
++    use settings_read::ReadError;
++    let result = match tokio::runtime::Builder::new_current_thread()
++        .enable_all()
++        .build()
++    {
++        Ok(runtime) => runtime.block_on(settings_read::read_settings(
++            args,
++            crate::platform::is_installed(),
++            is_root(),
++            is_cli_setting_change_disabled(),
++            crate::ipc::get_options_live,
++        )),
++        Err(_) => Err(ReadError::IpcUnavailable),
++    };
++    match result {
++        Ok(json) => {
++            println!("{}", json);
++            std::process::exit(0);
++        }
++        Err(error) => {
++            eprintln!("{}", error.message());
++            std::process::exit(error.exit_code());
++        }
++    }
++}
++
+ #[cfg(any(target_os = "windows", target_os = "macos"))]
+ use crate::client::translate;
+ #[cfg(not(debug_assertions))]
+@@ -470,6 +503,14 @@ pub fn core_main() -> Option<Vec<String>> {
+                 }
+             }
+             return None;
++        } else if args[0] == "--get-settings-json" {
++            #[cfg(windows)]
++            print_live_settings(&args);
++            #[cfg(not(windows))]
++            {
++                eprintln!("live settings command is Windows-only");
++                std::process::exit(3);
++            }
+         } else if args[0] == "--get-id" {
+             println!("{}", crate::ipc::get_id());
+             return None;
+diff --git a/src/ipc.rs b/src/ipc.rs
+index 68c987f..4f8a11f 100644
+--- a/src/ipc.rs
++++ b/src/ipc.rs
+@@ -1718,6 +1718,21 @@ pub async fn get_rendezvous_server(ms_timeout: u64) -> (String, Vec<String>) {
+     }
+ }
+
++// Read-only CLI path: never read or update the caller's configuration cache.
++// The caller bounds the complete connect/send/receive exchange to one second.
++#[cfg(windows)]
++pub async fn get_options_live() -> Result<HashMap<String, String>, ()> {
++    let mut connection = connect(1000, "").await.map_err(|_| ())?;
++    connection
++        .send(&Data::Options(None))
++        .await
++        .map_err(|_| ())?;
++    match connection.next_timeout(1000).await.map_err(|_| ())? {
++        Some(Data::Options(Some(options))) => Ok(options),
++        _ => Err(()),
++    }
++}
++
+ async fn get_options_(ms_timeout: u64) -> ResultType<HashMap<String, String>> {
+     let mut c = connect(ms_timeout, "").await?;
+     c.send(&Data::Options(None)).await?;
+diff --git a/src/settings_read.rs b/src/settings_read.rs
+new file mode 100644
+index 0000000..4fbf3ec
+--- /dev/null
++++ b/src/settings_read.rs
+@@ -0,0 +1,73 @@
++//! Upstream proposal only; not linked into rustdesk-agent.
++use hbb_common::tokio;
++use std::{collections::HashMap, future::Future, time::Duration};
++
++#[derive(Debug, PartialEq, Eq)]
++pub enum ReadError {
++    Usage,
++    Denied,
++    IpcUnavailable,
++    UnsupportedValue,
++}
++
++impl ReadError {
++    pub fn exit_code(&self) -> i32 {
++        match self {
++            Self::Usage => 2,
++            Self::Denied => 3,
++            Self::IpcUnavailable => 4,
++            Self::UnsupportedValue => 5,
++        }
++    }
++
++    pub fn message(&self) -> &'static str {
++        match self {
++            Self::Usage => "usage: --get-settings-json",
++            Self::Denied => "settings read denied",
++            Self::IpcUnavailable => "live settings unavailable",
++            Self::UnsupportedValue => "unsupported live setting value",
++        }
++    }
++}
++
++/// The callback must perform one live Options(None) request, without cache I/O.
++pub async fn read_settings<F, Fut>(
++    args: &[String],
++    installed: bool,
++    elevated: bool,
++    disabled: bool,
++    request: F,
++) -> Result<String, ReadError>
++where
++    F: FnOnce() -> Fut,
++    Fut: Future<Output = Result<HashMap<String, String>, ()>>,
++{
++    if args.len() != 1 || args[0] != "--get-settings-json" {
++        return Err(ReadError::Usage);
++    }
++    if !installed || !elevated || disabled {
++        return Err(ReadError::Denied);
++    }
++    let options = tokio::time::timeout(Duration::from_secs(1), request())
++        .await
++        .map_err(|_| ReadError::IpcUnavailable)?
++        .map_err(|_| ReadError::IpcUnavailable)?;
++    let approve = options.get("approve-mode");
++    let verification = options.get("verification-method");
++    if approve.is_some_and(|v| !matches!(v.as_str(), "" | "password" | "click" | "password-click"))
++        || verification.is_some_and(|v| {
++            !matches!(
++                v.as_str(),
++                "" | "use-temporary-password" | "use-permanent-password" | "use-both-passwords"
++            )
++        })
++    {
++        return Err(ReadError::UnsupportedValue);
++    }
++    Ok(serde_json::json!({
++        "schema_version": 1,
++        "source": "live_ipc",
++        "settings": {"approve_mode": approve, "verification_method": verification}
++    })
++    .to_string())
++}
