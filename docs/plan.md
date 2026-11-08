@@ -78,8 +78,10 @@ Ordinary-user CLI initialization rejection also passed. The subsequent
 rejection and cancellation of a real CLI child. Successful live settings
 readback and the connected canary remain pending. A subsequent
 [getter diagnosis](rustdesk-getter-diagnosis.md) resolved the blank ID by adding
-a disconnected adapter; settings getters remained blank and GUI comparison is
-still incomplete. The remaining gates below are
+a disconnected adapter. The follow-up GUI comparison confirmed that the displayed
+default settings coexist with blank CLI option output under both accounts.
+Default-state GUI comparison is complete; live settings readback, non-default
+values and connection behavior remain unverified. The remaining gates below are
 planned validation, not a record of passing tests.
 
 ## Design and alternatives
