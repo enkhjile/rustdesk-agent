@@ -7,8 +7,9 @@ use crate::{
     state::{DurableState, MAX_STATE_BYTES, StateStore},
 };
 use std::{
-    fs::File,
+    fs::{File, OpenOptions},
     io::{self, Read, Write},
+    os::windows::fs::OpenOptionsExt,
     path::{Path, PathBuf},
 };
 use windows_sys::Win32::{
@@ -45,7 +46,11 @@ impl FileStore {
         Self::open_at(&root()?, &credentials::service_sid()?)
     }
     fn open_at(path: &Path, sid: &str) -> io::Result<Self> {
-        let directory = open(path, None, true)?;
+        let directory = OpenOptions::new()
+            .read(true)
+            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
+            .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS)
+            .open(path)?;
         verify_security(
             &directory,
             &policy(sid, true)?,
