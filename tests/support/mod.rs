@@ -43,6 +43,8 @@ struct Results {
 }
 
 struct Backend {
+    status_response: Option<StatusCode>,
+    attempts: Vec<Vec<u8>>,
     response: Option<(StatusCode, HeaderMap, Vec<u8>)>,
     desired: BTreeMap<String, (DesiredState, Value)>,
     latest: BTreeMap<String, Value>,
@@ -99,6 +101,10 @@ async fn status(
     let report: Status = serde_json::from_slice(&body).map_err(|_| StatusCode::BAD_REQUEST)?;
     let value: Value = serde_json::from_slice(&body).map_err(|_| StatusCode::BAD_REQUEST)?;
     let mut backend = backend.lock().unwrap();
+    backend.attempts.push(body.to_vec());
+    if let Some(status) = backend.status_response {
+        return Ok(status);
+    }
     if !backend.status_schema.is_valid(&value) {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -157,6 +163,8 @@ impl Fixture {
             .build()
             .unwrap();
         let backend = Arc::new(Mutex::new(Backend {
+            status_response: None,
+            attempts: Vec::new(),
             response: None,
             desired: BTreeMap::new(),
             latest: BTreeMap::new(),
@@ -189,6 +197,14 @@ impl Fixture {
             handle,
             task,
         }
+    }
+    #[allow(dead_code)]
+    pub fn status_response(&self, status: Option<StatusCode>) {
+        self.backend.lock().unwrap().status_response = status;
+    }
+    #[allow(dead_code)]
+    pub fn attempts(&self) -> Vec<Vec<u8>> {
+        self.backend.lock().unwrap().attempts.clone()
     }
     /// Fault injection for the agent HTTP client tests only.
     #[allow(dead_code)]

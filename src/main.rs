@@ -23,6 +23,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let info = rustdesk_agent::credentials::enroll(origin, Zeroizing::new(input.to_owned()))?;
         println!("{}", serde_json::to_string_pretty(&info)?);
         Ok(())
+    } else if args.len() == 1 && args[0] == "--init-state" {
+        rustdesk_agent::state_store::initialize()?;
+        println!("Management state initialized");
+        Ok(())
     } else if args.len() == 1 && args[0] == "--enrollment-info" {
         let enrollment = rustdesk_agent::credentials::load()?;
         println!("{}", serde_json::to_string_pretty(&enrollment.info())?);
@@ -41,7 +45,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else if args.len() == 3 && args[0] == "--service" {
         service::dispatch(PathBuf::from(&args[1]), PathBuf::from(&args[2]))
     } else {
-        Err("Usage: rustdesk-agent --enroll <https-origin> (credential on stdin) | --enrollment-info | --detect <absolute RustDesk.exe path> | --service <absolute RustDesk.exe path> <absolute report.json path>".into())
+        Err("Usage: rustdesk-agent --enroll <https-origin> (credential on stdin) | --init-state | --enrollment-info | --detect <absolute RustDesk.exe path> | --service <absolute RustDesk.exe path> <absolute report.json path>".into())
     }
 }
 

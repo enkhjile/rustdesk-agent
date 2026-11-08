@@ -2,7 +2,7 @@
 
 This development slice targets Windows x64. It is not ready for kiosk deployment.
 It implements SCM start/stop/shutdown, read-only HTTPS polling when enrolled, and
-local diagnostic snapshots. There is no settings application or status delivery. Local [enrollment and credential
+local diagnostic snapshots. There is no settings application. [Durable state and status delivery](state.md) require administrator initialization before starting an enrolled service. Local [enrollment and credential
 storage](enrollment.md) are implemented but require Windows runtime validation.
 No service is installed automatically and no elevation is requested by the agent.
 
@@ -49,8 +49,8 @@ administrator-controlled absolute paths; quote all paths):
 The report path must be absolute and end in `.json`. Provision its directory first. Its ACL must permit the chosen service
 account to write while excluding untrusted writers; protect the executable and
 SCM configuration too. The skeleton does not set or verify these ACLs. Installation
-is an administrator action, outside this implementation; no installation commands
-have been run. Do not rely on an installer/SCM default that silently selects
+is an administrator action, outside this implementation; installation was tested
+only in the [isolated VM](windows-vm-validation.md). Do not rely on an installer/SCM default that silently selects
 LocalSystem. The service account remains an explicit deployment decision.
 
 The service probes and (when enrolled) polls immediately, then waits 60 seconds
@@ -72,39 +72,48 @@ or atomic durable revision store. Readers may need to retry during replacement.
 
 Valid enrollment enables `GET /v1/agent/desired` at the locally provisioned HTTPS
 origin. The client uses the per-device bearer credential, validates certificates
-and hostnames, disables redirects and automatic proxy discovery, and makes no
-status POSTs. There is no insecure TLS or custom-CA command-line option. Request
+and hostnames, disables redirects and automatic proxy discovery, and uses the same client for status POSTs. There is no insecure TLS or custom-CA command-line option. Request
 headers containing the credential are marked sensitive; raw HTTP errors and
 response bodies never enter diagnostics. HTTP/TLS libraries may retain memory
 copies of headers; zeroization is not a guarantee against memory capture.
 
 Connect timeout is 5 seconds and the whole request/body deadline is 10 seconds.
 Only JSON 200 responses up to 64 KiB are parsed, with the existing strict schema
-and in-memory revision guard. A 204 means unassigned, retaining the watermark.
+and persisted revision guard. A 204 means unassigned, retaining the watermark.
 Invalid, stale and conflicting state is rejected. Acceptance does not verify or
 apply any RustDesk setting. There is no settings adapter in the polling path.
 
-Snapshots include `management.status` (with a `kind` discriminator), the highest
+Snapshots include `management.delivery` for status delivery and `management.status` (with a `kind` discriminator), the highest
 `accepted_revision`, and `next_poll_seconds`. HTTP failures include only their
 numeric status. Network/TLS failures use `transport_error`; deadlines use `timeout`.
 All failures retry with exponential ceilings of 5, 10, 20, 40, 80, 160 and 300
 seconds, jittered between 80% and 100% (minimum 5 seconds). On 429/5xx, valid
 Retry-After seconds or HTTP dates raise that delay, capped at 300 seconds.
-Successful 200/204 resets failures and returns to a 60-second wait. These waits
+Successful GET 200/204 resets polling failures and uses a 60-second wait unless delivery is retrying. These waits
 start after detection and polling finish; they are not a fixed wall-clock cadence.
 
-The watermark exists only for this service process and resets on restart. Durable
-state and status delivery are the next slice. No cached state is applied during
+The watermark and latest pending report now survive restart; see [state initialization,
+permissions and recovery](state.md). Poll and delivery failures have separate retry
+counters. If both fail, the cycle uses the larger delay. Storage failures stop the service. No cached state is applied during
 outages, errors or unassignment; this service never writes settings at all.
 To stop polling, stop the agent service. Do not delete enrollment as a toggle.
 
 RustDesk 1.4.7's `--option` path requires installation and administrative privilege.
 A LocalService probe is therefore expected to report invalid output for option
 reads. An elevated administrator passes the source-level privilege check;
-LocalSystem specifically is not required by that check. No working unattended
-account or prompt-free runtime behavior has yet been demonstrated.
+LocalSystem specifically is not required by that check. The isolated VM demonstrated prompt-free LocalService polling with RustDesk absent.
+An account that can read installed RustDesk options remains unverified.
 
 ## Validation still required on disposable Windows
+
+The [2026-11-08 validation record](windows-validation-2026-11-08.md) records local
+Windows build/test results and the non-elevated storage-test failures. The host
+reported physical Dell hardware; service installation and reboot testing were
+therefore deferred to an isolated disposable VM.
+
+The subsequent [isolated VM record](windows-vm-validation.md) records passing
+elevated Windows tests, SCM/HTTPS reporting, service-token access, cancellation,
+retries and guest reboot. Its pending section identifies the checks still outstanding.
 
 - Run `--detect` with RustDesk absent, installed 1.4.7, a different version and
   the RustDesk service stopped. Compare reported ID/settings to the actual UI.
@@ -120,7 +129,8 @@ account or prompt-free runtime behavior has yet been demonstrated.
 Local verification: portable parser/process and HTTPS polling tests. The polling
 slice adds a TLS dependency that requires Windows C headers, so the macOS
 cross-target check cannot complete without the Windows SDK; use hosted Windows CI.
-Actual Windows service/UAC and RustDesk runtime tests are pending.
+Actual read-only service/UAC results are recorded in the isolated VM report;
+installed RustDesk runtime tests remain pending.
 
 Sources: [RustDesk 1.4.7 CLI](https://github.com/rustdesk/rustdesk/blob/1.4.7/src/core_main.rs),
 [IPC fallback/write behavior](https://github.com/rustdesk/rustdesk/blob/1.4.7/src/ipc.rs#L1664-L1697),

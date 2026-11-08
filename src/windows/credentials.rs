@@ -24,7 +24,7 @@ use zeroize::{Zeroize, Zeroizing};
 const FILE_NAME: &str = "enrollment.dpapi";
 const SECURITY: u32 = OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION;
 
-struct LocalMemory(*mut c_void);
+pub(crate) struct LocalMemory(*mut c_void);
 impl Drop for LocalMemory {
     fn drop(&mut self) {
         unsafe {
@@ -32,7 +32,7 @@ impl Drop for LocalMemory {
         }
     }
 }
-fn wide(value: impl AsRef<OsStr>) -> Vec<u16> {
+pub(crate) fn wide(value: impl AsRef<OsStr>) -> Vec<u16> {
     value.as_ref().encode_wide().chain(Some(0)).collect()
 }
 fn invalid() -> io::Error {
@@ -41,7 +41,7 @@ fn invalid() -> io::Error {
         "invalid or unprotected enrollment store",
     )
 }
-fn check(result: i32) -> io::Result<()> {
+pub(crate) fn check(result: i32) -> io::Result<()> {
     if result == 0 {
         Err(io::Error::last_os_error())
     } else {
@@ -57,7 +57,7 @@ unsafe fn string(pointer: *const u16) -> OsString {
     OsString::from_wide(unsafe { std::slice::from_raw_parts(pointer, length) })
 }
 
-fn root() -> io::Result<PathBuf> {
+pub(crate) fn root() -> io::Result<PathBuf> {
     let mut pointer = null_mut();
     let result =
         unsafe { SHGetKnownFolderPath(&FOLDERID_ProgramData, 0, null_mut(), &mut pointer) };
@@ -71,7 +71,7 @@ fn root() -> io::Result<PathBuf> {
     Ok(path.join("RustDeskAgentEnrollment"))
 }
 
-fn service_sid() -> io::Result<String> {
+pub(crate) fn service_sid() -> io::Result<String> {
     let mut sid = [0u32; 17];
     let mut sid_size = std::mem::size_of_val(&sid) as u32;
     let mut domain = [0u16; 256];
@@ -98,7 +98,7 @@ fn service_sid() -> io::Result<String> {
     Ok(sid)
 }
 
-fn require_admin() -> io::Result<()> {
+pub(crate) fn require_admin() -> io::Result<()> {
     let mut sid = null_mut();
     check(unsafe { ConvertStringSidToSidW(wide("S-1-5-32-544").as_ptr(), &mut sid) })?;
     let _memory = LocalMemory(sid);
@@ -116,6 +116,9 @@ fn require_admin() -> io::Result<()> {
 fn policy(sid: &str) -> io::Result<LocalMemory> {
     // No inherited ACEs; service can read, administrators and SYSTEM can maintain.
     let sddl = format!("O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FRFX;;;{sid})");
+    descriptor(&sddl)
+}
+pub(crate) fn descriptor(sddl: &str) -> io::Result<LocalMemory> {
     let mut descriptor = null_mut();
     check(unsafe {
         ConvertStringSecurityDescriptorToSecurityDescriptorW(
@@ -127,20 +130,20 @@ fn policy(sid: &str) -> io::Result<LocalMemory> {
     })?;
     Ok(LocalMemory(descriptor))
 }
-fn security_attributes(descriptor: &LocalMemory) -> SECURITY_ATTRIBUTES {
+pub(crate) fn security_attributes(descriptor: &LocalMemory) -> SECURITY_ATTRIBUTES {
     SECURITY_ATTRIBUTES {
         nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
         lpSecurityDescriptor: descriptor.0,
         bInheritHandle: 0,
     }
 }
-fn descriptor_text(descriptor: *mut c_void) -> io::Result<OsString> {
+fn descriptor_text(descriptor: *mut c_void, security: u32) -> io::Result<OsString> {
     let mut text = null_mut();
     check(unsafe {
         ConvertSecurityDescriptorToStringSecurityDescriptorW(
             descriptor,
             1,
-            SECURITY,
+            security,
             &mut text,
             null_mut(),
         )
@@ -149,6 +152,14 @@ fn descriptor_text(descriptor: *mut c_void) -> io::Result<OsString> {
     Ok(unsafe { string(text) })
 }
 fn verify(file: &File, expected: &LocalMemory, directory: bool) -> io::Result<()> {
+    verify_security(file, expected, directory, SECURITY)
+}
+pub(crate) fn verify_security(
+    file: &File,
+    expected: &LocalMemory,
+    directory: bool,
+    security: u32,
+) -> io::Result<()> {
     let metadata = file.metadata()?;
     if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
         || metadata.is_dir() != directory
@@ -160,7 +171,7 @@ fn verify(file: &File, expected: &LocalMemory, directory: bool) -> io::Result<()
         GetSecurityInfo(
             file.as_raw_handle(),
             SE_FILE_OBJECT,
-            SECURITY,
+            security,
             null_mut(),
             null_mut(),
             null_mut(),
@@ -172,12 +183,12 @@ fn verify(file: &File, expected: &LocalMemory, directory: bool) -> io::Result<()
         return Err(io::Error::from_raw_os_error(result as i32));
     }
     let actual = LocalMemory(actual);
-    if descriptor_text(actual.0)? != descriptor_text(expected.0)? {
+    if descriptor_text(actual.0, security)? != descriptor_text(expected.0, security)? {
         return Err(invalid());
     }
     Ok(())
 }
-fn open(path: &Path, create: Option<&LocalMemory>, directory: bool) -> io::Result<File> {
+pub(crate) fn open(path: &Path, create: Option<&LocalMemory>, directory: bool) -> io::Result<File> {
     let attributes = create.map(security_attributes);
     let access = GENERIC_READ | if create.is_some() { GENERIC_WRITE } else { 0 };
     let handle = unsafe {
