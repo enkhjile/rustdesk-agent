@@ -1,8 +1,8 @@
 # Windows service skeleton and read-only detection
 
 This development slice targets Windows x64. It is not ready for kiosk deployment.
-It implements SCM start/stop/shutdown and local diagnostic snapshots only. There
-is no management polling or settings application. Local [enrollment and credential
+It implements SCM start/stop/shutdown, read-only HTTPS polling when enrolled, and
+local diagnostic snapshots. There is no settings application or status delivery. Local [enrollment and credential
 storage](enrollment.md) are implemented but require Windows runtime validation.
 No service is installed automatically and no elevation is requested by the agent.
 
@@ -53,18 +53,50 @@ is an administrator action, outside this implementation; no installation command
 have been run. Do not rely on an installer/SCM default that silently selects
 LocalSystem. The service account remains an explicit deployment decision.
 
-The service probes immediately and then waits 60 seconds between snapshots.
-STOP or SHUTDOWN interrupts the wait or active probe; cancellation requests
+The service probes and (when enrolled) polls immediately, then waits 60 seconds
+after a successful cycle. Poll failures use the bounded retry delay described below.
+STOP or SHUTDOWN interrupts the wait, HTTP request or active probe; cancellation requests
 termination of the direct CLI child. Descendant processes are not managed by
 a Windows Job Object in this skeleton. Snapshot-file writes are synchronous
 and must finish before a pending stop can be handled; use a local report directory. SCM receives pending/running/stopped status.
 Fatal runtime/report-write errors or an invalid existing enrollment store stop
 the service with service-specific code 1. Missing enrollment keeps read-only
 detection available; snapshots include `enrollment: null`. Valid enrollment adds
-only UUID and management origin, never the credential.
+only UUID and management origin, never the credential. Missing enrollment also
+sets `management: null` and makes no management requests.
 Detection failures are recorded and retried on the next cycle. The JSON file
 contains a timestamp and detection results; it is overwritten, not an audit log
 or atomic durable revision store. Readers may need to retry during replacement.
+
+## Read-only management polling
+
+Valid enrollment enables `GET /v1/agent/desired` at the locally provisioned HTTPS
+origin. The client uses the per-device bearer credential, validates certificates
+and hostnames, disables redirects and automatic proxy discovery, and makes no
+status POSTs. There is no insecure TLS or custom-CA command-line option. Request
+headers containing the credential are marked sensitive; raw HTTP errors and
+response bodies never enter diagnostics. HTTP/TLS libraries may retain memory
+copies of headers; zeroization is not a guarantee against memory capture.
+
+Connect timeout is 5 seconds and the whole request/body deadline is 10 seconds.
+Only JSON 200 responses up to 64 KiB are parsed, with the existing strict schema
+and in-memory revision guard. A 204 means unassigned, retaining the watermark.
+Invalid, stale and conflicting state is rejected. Acceptance does not verify or
+apply any RustDesk setting. There is no settings adapter in the polling path.
+
+Snapshots include `management.status` (with a `kind` discriminator), the highest
+`accepted_revision`, and `next_poll_seconds`. HTTP failures include only their
+numeric status. Network/TLS failures use `transport_error`; deadlines use `timeout`.
+All failures retry with exponential ceilings of 5, 10, 20, 40, 80, 160 and 300
+seconds, jittered between 80% and 100% (minimum 5 seconds). On 429/5xx, valid
+Retry-After seconds or HTTP dates raise that delay, capped at 300 seconds.
+Successful 200/204 resets failures and returns to a 60-second wait. These waits
+start after detection and polling finish; they are not a fixed wall-clock cadence.
+
+The watermark exists only for this service process and resets on restart. Durable
+state and status delivery are the next slice. No cached state is applied during
+outages, errors or unassignment; this service never writes settings at all.
+To stop polling, stop the agent service. Do not delete enrollment as a toggle.
 
 RustDesk 1.4.7's `--option` path requires installation and administrative privilege.
 A LocalService probe is therefore expected to report invalid output for option
@@ -85,9 +117,13 @@ account or prompt-free runtime behavior has yet been demonstrated.
   Read-only success does not authorize enabling writes; IPC fallback and whole-map
   writes still require separate fault tests before a write adapter can ship.
 
-Local verification: portable parser/process tests and Windows x64 cross-target
-compile checks. Actual Windows service/UAC and RustDesk runtime tests are pending.
+Local verification: portable parser/process and HTTPS polling tests. The polling
+slice adds a TLS dependency that requires Windows C headers, so the macOS
+cross-target check cannot complete without the Windows SDK; use hosted Windows CI.
+Actual Windows service/UAC and RustDesk runtime tests are pending.
 
 Sources: [RustDesk 1.4.7 CLI](https://github.com/rustdesk/rustdesk/blob/1.4.7/src/core_main.rs),
 [IPC fallback/write behavior](https://github.com/rustdesk/rustdesk/blob/1.4.7/src/ipc.rs#L1664-L1697),
 [windows-service](https://docs.rs/windows-service/0.8.1/windows_service/).
+
+HTTP client reference: [reqwest request deadlines, redirects and TLS configuration](https://docs.rs/reqwest/0.13.5/reqwest/struct.ClientBuilder.html).

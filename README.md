@@ -1,6 +1,6 @@
 # RustDesk Windows agent — development slices
 
-This is an incomplete, non-deployable Windows x64 agent. It contains a strict desired-state parser, an in-memory revision guard, a read-only RustDesk detector and a Windows Service skeleton. The service writes local diagnostic snapshots only; it does not apply settings. Local [enrollment and credential storage](docs/enrollment.md) use machine-scoped DPAPI plus restrictive ACLs; Windows runtime validation is pending. Server registration, durable revision/report state, management HTTP polling and the write adapter remain unimplemented. See [Windows usage and limits](docs/windows-service.md), [plan](docs/plan.md), and [contract fixture](docs/contract-testing.md).
+This is an incomplete, non-deployable Windows x64 agent. It contains a strict desired-state parser, an in-memory revision guard, a read-only RustDesk detector and a Windows Service skeleton. An enrolled service now polls desired state over HTTPS and records acceptance/errors in local diagnostic snapshots; it never applies settings or sends status reports. Local [enrollment and credential storage](docs/enrollment.md) use machine-scoped DPAPI plus restrictive ACLs. PR #3 passed Windows DPAPI/storage tests; actual service-account access, reboot and UAC validation remain pending. Server registration, durable revision/report state, status delivery and the write adapter remain unimplemented. See [Windows usage and limits](docs/windows-service.md), [plan](docs/plan.md), and [contract fixture](docs/contract-testing.md).
 
 ## Repository layout
 
@@ -11,6 +11,7 @@ src/lib.rs          Desired-state parsing, reconciliation and backoff
 src/detection.rs    Read-only query allowlist and output parsing
 src/probe.rs        Bounded CLI process runner
 src/windows/       Windows SCM lifecycle and protected enrollment storage
+src/management.rs   Authenticated read-only HTTPS polling and retry scheduling
 src/enrollment.rs   Validated device identity, origin and credential record
 tests/reconcile.rs  Tests using an in-memory settings adapter
 docs/plan.md        Design, evidence, milestones and validation gates
@@ -39,14 +40,15 @@ cargo test --locked
 cargo build --locked
 ```
 
-For a Windows x64 compile check:
+On a host with the Windows MSVC C++ build tools and SDK, check Windows x64 with:
 
 ```sh
 rustup target add x86_64-pc-windows-msvc
 cargo check --locked --target x86_64-pc-windows-msvc
 ```
 
-Add `--offline` to Cargo commands when dependencies are cached. A cross-target
+Add `--offline` to Cargo commands when dependencies are cached. The TLS dependency also needs Windows C headers; installing the Rust target alone
+is insufficient for cross-checking from macOS. A cross-target
 check does not run Windows tests or establish service/UAC behavior. The core can
 be tested on the development host; the eventual agent targets Windows x64 only.
 
@@ -71,7 +73,8 @@ A separate Linux CI job runs cargo-deny (its action uses Docker) to check the
 locked dependency graph for advisories, licenses and unapproved sources. This
 checks dependencies for all targets, including Windows; it does not add Linux
 agent support. No advisories are ignored. The license policy allows MIT,
-Apache-2.0 and Unicode-3.0 dependencies; the unpublished application itself is
+Apache-2.0, Unicode-3.0, ISC, BSD-3-Clause, Zlib and CDLA-Permissive-2.0 dependencies
+(the latter four cover the HTTP/TLS stack and root certificate data); the unpublished application itself is
 excluded from license checks until a distribution license is selected.
 
 Run the same checks locally:

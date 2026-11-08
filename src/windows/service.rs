@@ -100,13 +100,17 @@ fn run(
         .enable_all()
         .build()?;
     let enrollment = match rustdesk_agent::credentials::load() {
-        Ok(value) => Some(value.info()),
+        Ok(value) => Some(value),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
         Err(error) => return Err(error.into()),
     };
     publish(handle, ServiceState::Running, false)?;
     let (executable, report_path) = CONFIG.get().ok_or("missing service configuration")?;
+    let enrollment_info = enrollment.as_ref().map(|value| value.info());
     runtime.block_on(async {
+        let mut poller = enrollment
+            .map(rustdesk_agent::management::Poller::new)
+            .transpose()?;
         loop {
             // Cancelling detection drops its child with kill_on_drop enabled.
             let detection = tokio::select! {
@@ -114,17 +118,29 @@ fn run(
                 _ = stop.changed() => break,
                 detection = rustdesk_agent::probe::detect(executable) => detection,
             };
+            let management = match poller.as_mut() {
+                Some(poller) => tokio::select! {
+                    biased;
+                    _ = stop.changed() => break,
+                    observation = poller.poll() => Some(observation),
+                },
+                None => None,
+            };
+            let delay = management
+                .as_ref()
+                .map_or(60, |value| value.next_poll_seconds);
             let snapshot = serde_json::json!({
                 "observed_at_unix_seconds": SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
                 "detection": detection,
-                "enrollment": enrollment,
+                "enrollment": enrollment_info,
+                "management": management,
             });
             // A diagnostic snapshot only, never revision state or an applied report.
             std::fs::write(report_path, serde_json::to_vec_pretty(&snapshot)?)?;
             tokio::select! {
                 biased;
                 _ = stop.changed() => break,
-                _ = tokio::time::sleep(Duration::from_secs(60)) => (),
+                _ = tokio::time::sleep(Duration::from_secs(delay)) => (),
             }
         }
         Ok(())

@@ -1,3 +1,6 @@
+#[cfg(test)]
+extern crate self as rustdesk_agent;
+
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -139,6 +142,12 @@ impl RevisionGuard {
         io: &mut impl SettingsIo,
         desired: &DesiredState,
     ) -> Result<Report, &'static str> {
+        self.accept(desired)?;
+        Ok(reconcile(io, desired))
+    }
+
+    /// Validate and remember state without reading or writing any settings.
+    pub fn accept(&mut self, desired: &DesiredState) -> Result<(), &'static str> {
         if !desired.is_valid() {
             return Err("invalid_state");
         }
@@ -151,7 +160,7 @@ impl RevisionGuard {
             }
         }
         self.accepted = Some(desired.clone());
-        Ok(reconcile(io, desired))
+        Ok(())
     }
 }
 
@@ -205,3 +214,5 @@ pub mod enrollment;
 #[cfg(windows)]
 #[path = "windows/credentials.rs"]
 pub mod credentials;
+
+pub mod management;
