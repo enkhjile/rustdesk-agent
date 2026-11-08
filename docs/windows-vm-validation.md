@@ -91,14 +91,18 @@ against administrators, SYSTEM or a compromised agent.
 
 Ordinary-user validation is not yet complete. Launching the helper with
 `Start-Process -Credential` through PowerShell Direct did not produce a successful
-harness result. A limited scheduled-task probe is prepared; Windows canceled the
-host UAC launch before it ran. Start/stop during GET/POST, report retries across
+harness result. A later limited scheduled-task attempt registered successfully,
+but returned `267011` (`0x41303`, not yet run) and produced no probe output within
+20 seconds. That is a harness prerequisite failure, not evidence of user access
+or denial. A diagnostic phase is prepared to inspect task settings and retry;
+Windows canceled its host UAC launch before it started. Start/stop during GET/POST, report retries across
 restart, guest reboot persistence, repeated/ordinary-user initialization and
 prompt-free operation after setup are still pending.
 
 Host scripts and raw transcripts remain under `target\validation\`; guest tools
 and logs are under `C:\Lab`. These local harness files are not shipped agent
-features. `continue-validation.ps1` is the next elevated host step. The VM remains
+features. `runtime-validation.ps1` is the next elevated host step; it diagnoses
+the limited task and then runs the independent HTTP/reboot checks. The VM remains
 isolated and running; the agent was stopped after the access probes. No production
 endpoint, real credential, RustDesk write, merge or release was involved.
 
