@@ -123,7 +123,7 @@ RustDesk 1.4.7 source implements `--get-id`, `--option key` read, and `--option 
 Keep a single crate. Existing `src/lib.rs` owns the portable allowlist and
 reconciliation; `tests/reconcile.rs` exercises behavior. `docs/schemas/` defines
 the proposed wire contract. Add modules only as their milestone is implemented:
-`src/management.rs` now handles read-only HTTPS polling and in-memory revision acceptance, `src/windows/` now holds SCM lifecycle, `src/probe.rs` the bounded read-only
+`src/management.rs` now handles HTTPS polling, durable revision acceptance and read-only status delivery, `src/windows/` now holds SCM lifecycle, `src/probe.rs` the bounded read-only
 CLI runner, and `src/main.rs` the Windows entry point. Credential storage now lives in `src/windows/credentials.rs` with portable
 validation in `src/enrollment.rs`; read-only management polling is integrated. Keep the test backend separate from the installed agent.
 `src/state.rs` defines the bounded snapshot and report, while `src/windows/state_store.rs` owns protected file replacement and writer locking. No extra workspace crates are needed.

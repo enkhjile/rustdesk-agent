@@ -90,12 +90,14 @@ impl StateStore for FileStore {
             Ok(file) => {
                 verify_file(&file, &self.policy)?;
                 drop(file);
-                std::fs::remove_file(&temp)?;
+                std::fs::remove_file(&temp)
+                    .map_err(|e| io::Error::new(e.kind(), format!("remove staged state: {e}")))?;
             }
             Err(error) if error.kind() == io::ErrorKind::NotFound => (),
             Err(error) => return Err(error),
         }
-        let mut file = open(&temp, Some(&self.policy), false)?;
+        let mut file = open(&temp, Some(&self.policy), false)
+            .map_err(|e| io::Error::new(e.kind(), format!("create staged state: {e}")))?;
         verify_file(&file, &self.policy)?;
         file.write_all(bytes)?;
         file.sync_all()?;
@@ -107,6 +109,7 @@ impl StateStore for FileStore {
                 MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
             )
         })
+        .map_err(|e| io::Error::new(e.kind(), format!("replace committed state: {e}")))
     }
 }
 
