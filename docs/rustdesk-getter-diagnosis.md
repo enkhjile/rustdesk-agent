@@ -70,10 +70,10 @@ the [GUI model](https://github.com/rustdesk/rustdesk/blob/1.4.7/flutter/lib/mode
 The standard-client [approve-mode default](https://github.com/rustdesk/rustdesk/blob/1.4.7/flutter/lib/common.dart#L3907)
 is empty; the [settings control](https://github.com/rustdesk/rustdesk/blob/1.4.7/flutter/lib/desktop/pages/desktop_setting_page.dart#L1199)
 labels that choice as accepting sessions via both password and click.
-These are source-derived interpretations, not yet GUI observations or permission
+At this stage these were source-derived interpretations, not GUI observations or permission
 to normalize blank CLI output into verified settings.
 
-GUI comparison remains incomplete: VMConnect displayed the guest sign-in screen,
+In the initial run, GUI comparison was incomplete: VMConnect displayed the guest sign-in screen,
 but computer-use input did not reach the elevated console. No guest interactive
 sign-in or GUI settings observation was completed. The final harness phase named
 `after-gui` is only a repeated CLI probe; its name is not evidence of GUI testing.
@@ -89,3 +89,44 @@ The runner completed at 21:24:08 JST and recorded the VM as `Off`.
 No agent implementation failure was demonstrated, so this follow-up changes
 documentation only. `git diff --check` passed; no new Rust build or unit-test
 run is claimed for this documentation change.
+
+## GUI comparison follow-up — 22:34–22:36 JST
+
+The same isolated guest and installed 1.4.7 executable were used. This run had
+**no network adapters**; the previously generated ID survived adapter removal
+and guest restart. The user signed in as `RDAGENT-LAB\LabAdmin` and navigated
+the guest GUI because automated input could not control the elevated VMConnect
+window. The resulting screens were inspected through computer-use snapshots. Security settings remained
+locked throughout observation; no option was changed or password provisioned.
+
+The main window displayed ID `486 577 153` and a connecting-to-network status.
+Settings → Security → Password displayed:
+
+| Field | Observed Japanese GUI label | Meaning |
+| --- | --- | --- |
+| Approval dropdown | 両方の方法でセッションを承認 | Accept sessions via both methods |
+| Selected verification radio | 両方のパスワードを使用する | Use both passwords |
+
+These selections match the source-derived defaults described above. They do not
+prove that a permanent password exists or that a remote connection would work.
+
+At 22:36:34 JST, with the GUI still open, the same four fixed CLI probes were
+repeated as elevated LabAdmin through PowerShell Direct and as LocalService
+through the temporary `RustDeskLabReadProbe` service. Both returned version
+`1.4.7`, ID `486577153`, and newline-only output for both option getters. All
+exited 0, with empty stderr, no timeout, and durations of 74–93 ms. The transcript
+recorded LabAdmin active in console session 1, the RustDesk service in session 0,
+and its server, tray and GUI processes in session 1.
+
+Opening the GUI did not make either setting getter return an explicit value.
+The observed GUI defaults are consistent with blank CLI output, but the CLI's
+cache fallback still prevents distinguishing a live default from a failed IPC
+read. This completes the default-state GUI comparison only; it does not verify
+non-default values, setting changes, live CLI readback or actual connections.
+Keep writes disabled and do not normalize blank output into verified settings.
+
+Evidence: host `target/validation/gui-comparison.host.log` and
+`gui-comparison-cli.log`, plus the inspected VM console screens. Screenshots
+containing the transient password are not committed. Cleanup deleted the probe
+service, stopped the agent, RustDesk service and endpoint, and shut down the VM.
+The runner recorded `Off` and no adapters at 22:36:41 JST. No agent code changed.
