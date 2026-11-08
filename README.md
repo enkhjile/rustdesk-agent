@@ -73,7 +73,8 @@ A separate Linux CI job runs cargo-deny (its action uses Docker) to check the
 locked dependency graph for advisories, licenses and unapproved sources. This
 checks dependencies for all targets, including Windows; it does not add Linux
 agent support. No advisories are ignored. The license policy allows MIT,
-Apache-2.0 and Unicode-3.0 dependencies; the unpublished application itself is
+Apache-2.0, Unicode-3.0, ISC, BSD-3-Clause, Zlib and CDLA-Permissive-2.0 dependencies
+(the latter four cover the HTTP/TLS stack and root certificate data); the unpublished application itself is
 excluded from license checks until a distribution license is selected.
 
 Run the same checks locally:
