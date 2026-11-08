@@ -73,14 +73,14 @@ restored. The helper calls `CreateFileW` with specific access masks and closes t
 handle; it never reads enrollment bytes or changes data/ACLs. Error 5 means access
 denied; 0 means the handle was granted.
 
-| Requested access | Agent SID | Other service, same account |
-| --- | --- | --- |
-| Enrollment GENERIC_READ | 0 | 5 |
-| Enrollment GENERIC_WRITE | 5 | 5 |
-| State GENERIC_READ | 0 | 5 |
-| State GENERIC_WRITE | 0 | 5 |
-| State WRITE_DAC | 5 | 5 |
-| State WRITE_OWNER | 5 | 5 |
+| Requested access | Agent SID | Other service, same account | Ordinary user |
+| --- | --- | --- | --- |
+| Enrollment GENERIC_READ | 0 | 5 | 5 |
+| Enrollment GENERIC_WRITE | 5 | 5 | 5 |
+| State GENERIC_READ | 0 | 5 | 5 |
+| State GENERIC_WRITE | 0 | 5 | 5 |
+| State WRITE_DAC | 5 | 5 | 5 |
+| State WRITE_OWNER | 5 | 5 | 5 |
 
 This verifies denial of permission-changing handle rights even when the other
 service shares the replacement file owner's account. Both token group lists
@@ -117,23 +117,33 @@ Executable SHA-256, independently read inside the guest:
 
 ## Pending checks and retained artifacts
 
-Ordinary-user validation is not yet complete. Launching the helper with
-`Start-Process -Credential` through PowerShell Direct did not produce a successful
-harness result. A later limited scheduled-task attempt registered successfully,
-but returned `267011` (`0x41303`, not yet run) and produced no probe output within
-20 seconds. That is a harness prerequisite failure, not evidence of user access
-or denial. Diagnostics identified task logon failure `2147943785` (Win32
-1385): the fresh dummy account lacked batch-logon rights. A guest-only grant of
-`SeBatchLogonRight` was applied while retaining existing assignments. The next
-attempt still queued the task without launching its action (scheduler event 325).
-Even after a further 45-second output wait, no probe file existed. Its reported
-LastTaskResult of 0 is not evidence of execution or a pass. A limited S4U task
-is the next harness attempt. Ordinary-user access and repeated/ordinary-user
-initialization are still pending; the HTTP/reboot results above are complete.
+Ordinary-user file-access checks completed at `19:18:06+09:00`. The harness used
+`LogonUserW` (batch logon, type 4), then `WindowsIdentity.Impersonate` and the same
+`CreateFileW` access masks as the service helper. The recorded identity was
+`RDAGENT-LAB\LabUser`, SID `S-1-5-21-3490330849-2768354856-2119030319-1002`.
+Its groups included Users and Batch, not Administrators or the agent service SID.
+All six requests returned error 5. This exercises actual Windows access checks
+under an ordinary-user token; it does not claim an interactive-user CLI run.
+
+Repeated elevated initialization also passed: the following command returned 1,
+and SHA-256 of `state.json` before and after was identical:
+
+```powershell
+cmd.exe /c 'C:\Lab\rustdesk-agent.exe --init-state > C:\Lab\Results\repeat-init.stdout 2> C:\Lab\Results\repeat-init.stderr'
+```
+
+The separate ordinary-user `--init-state` CLI check remains unverified. Scheduled
+task attempts first failed with missing batch-logon rights (Win32 1385), then
+queued without launching after a guest-only grant preserving existing rights.
+An S4U task registration was denied. `CreateProcessWithTokenW` attempts failed
+during process initialization (`0xC0000142`; the console-free .NET helper also
+returned `0x8007045A`), before producing probe output. These are harness failures,
+not evidence of agent rejection or success. Direct token impersonation resolved
+the file-access check without treating any failed launch as a passing test.
 
 Host scripts and raw transcripts remain under `target\validation\`; guest tools
 and logs are under `C:\Lab`. These local harness files are not shipped agent
-features. `finish-user-check.ps1` is the next elevated host step. The VM remains
+features. The VM remains
 isolated and running; the agent and endpoint were stopped after reboot validation. No production
 endpoint, real credential, RustDesk write, merge or release was involved.
 
