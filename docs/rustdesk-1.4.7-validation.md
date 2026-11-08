@@ -1,0 +1,130 @@
+# Installed RustDesk 1.4.7 read-only validation — 2026-11-08
+
+The agent correctly rejected blank getter output from the installed RustDesk
+binary. This run did **not** establish working live settings reads or authorize
+writes. No agent implementation failure was demonstrated.
+
+## Environment and provenance
+
+- Same disposable Hyper-V guest as the [service validation](windows-vm-validation.md):
+  `RDAGENT-LAB`, Windows 11 Pro 25H2 build 26200.6584, 4 GiB RAM, no network adapter.
+- Agent from merged commit `52350eb`, executable SHA-256
+  `6E11A0A2FEF767B2DF3E74A572238565743C5F1BBAB3C54341D56D50075E7A2C`.
+- Agent service account: `NT AUTHORITY\LocalService`, its existing service SID
+  enabled. RustDesk's MSI installed its own service as LocalSystem; the agent
+  account was not elevated or changed.
+- Administrator probe: `RDAGENT-LAB\LabAdmin`; service probe:
+  `NT AUTHORITY\LocalService` in temporary `RustDeskLabReadProbe`.
+- Existing dummy enrollment and guest-local HTTPS endpoint only. No production
+  connectivity, permanent-password command, option setter or TOML edit.
+
+Downloaded the MSI from the [official 1.4.7 release](https://github.com/rustdesk/rustdesk/releases/tag/1.4.7):
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `rustdesk-1.4.7-x86_64.msi` | `106849AFA83E852B8F972EFA84007D6B1A9D2F02DE14C3C4977CF090E2BACB88` |
+| Installed `C:\Program Files\RustDesk\rustdesk.exe` | `7A43F30721826E6D6B11686A47B3F6D672DC58C1BDB2B62076D704E8BA5235C0` |
+
+The MSI hash matched GitHub's release-asset digest. Both signatures validated on
+the host outside the network sandbox, signer `CN=PURSLANE, O=PURSLANE`.
+The isolated guest returned `UnknownError` for the executable signature; it did
+not establish chain trust offline. The same copied executable hash validated on
+the host. A sandboxed host check also initially failed chain building.
+
+Installation occurred only inside the guest:
+
+```powershell
+msiexec.exe /i C:\Lab\rustdesk-1.4.7-x86_64.msi /qn /norestart /L*v C:\Lab\rustdesk-install.log
+```
+
+Installer exit was 0. The guest had no NIC throughout installation and testing.
+
+## Getter results
+
+The harness used `ProcessStartInfo` with `UseShellExecute=false`, no console,
+redirected stdout/stderr and a three-second timeout. These were the only raw CLI
+arguments executed, under both accounts with the RustDesk service Running and
+then Stopped:
+
+| Arguments | Stdout in all four contexts | Exit / stderr |
+| --- | --- | --- |
+| `--version` | `1.4.7` followed by newline | 0 / empty |
+| `--get-id` | newline only | 0 / empty |
+| `--option approve-mode` | newline only | 0 / empty |
+| `--option verification-method` | newline only | 0 / empty |
+
+No query timed out. In the completed 20:51–20:52 JST run, queries took 73–85 ms.
+Blank values were not interpreted as defaults, successful IPC, or verified
+settings. Offline first installation, session context and IPC/cache behavior
+remain possible factors; this test does not distinguish them. RustDesk getters
+may themselves maintain caches; issuing only getters is not a guarantee that
+RustDesk performs no internal file writes.
+
+## Actual agent service
+
+With the agent stopped, the harness set its SCM command line through
+`Invoke-CimMethod` and checked both the method result and read-back path:
+
+```powershell
+$service = Get-CimInstance Win32_Service -Filter "Name='RustDeskAgent'"
+$path = '"C:\Lab\rustdesk-agent.exe" --service "C:\Program Files\RustDesk\rustdesk.exe" "C:\ProgramData\RustDeskAgent\detection.json"'
+Invoke-CimMethod -InputObject $service -MethodName Change -Arguments @{PathName=$path}
+Start-Service RustDeskAgent
+Get-Content C:\ProgramData\RustDeskAgent\detection.json
+sc.exe queryex RustDeskAgent
+Stop-Service RustDeskAgent
+```
+
+With RustDesk both running and stopped, the actual LocalService agent reported:
+
+- `executable_present: true` and version `observed: 1.4.7`.
+- ID, approve-mode and verification-method: `invalid_output`.
+- `live_state_verified: false`; SCM Running with Win32/service exit codes 0.
+- Guest-local management GET 204, accepted revision 7 retained. This run did not
+  generate a fresh desired-state report; report semantics were tested previously.
+
+The original SCM command line was restored after testing. Earlier `sc.exe`
+quoting failed to set the installed path; snapshots from that attempt still used
+the absent-binary path and are excluded from these results.
+
+## Stop during an actual CLI child
+
+The 20:54 JST run started a process monitor before starting the agent. It found
+an actual child of the agent and suspended that process with `NtSuspendProcess`
+so the getter could not finish before the stop request. The installed executable
+was not modified or replaced with a stub. Recorded evidence:
+
+```text
+agent PID: 4948
+child PID: 4544
+ExecutablePath: C:\Program Files\RustDesk\rustdesk.exe
+CommandLine: "C:\Program Files\RustDesk\rustdesk.exe" --version
+ParentProcessId: 4948
+Stop-Service RustDeskAgent: 262 ms
+child absent one second after stop
+SCM: STOPPED; Win32 exit 0; service exit 0
+```
+
+This verifies cancellation of a deliberately stalled, real direct CLI child.
+It does not validate every RustDesk IPC hang or descendant-process cleanup.
+Earlier attempts attached the monitor after startup and missed the short-lived
+children; those attempts were recorded as not tested, not as passing cancellation.
+
+## Limits and artifacts
+
+Raw logs and local harness sources remain under host `target\validation` and
+guest `C:\Lab`; they are not installed agent features. Harness recovery included
+replacing unsupported PowerShell 5.1 `Add-Type -Path *.exe` with assembly loading,
+using the CIM service API to avoid quoting ambiguity, and restarting a stalled
+PowerShell Direct connection. No agent source changes were needed.
+
+Cleanup removed the temporary probe service, restored the original agent command
+line, stopped the agent, RustDesk service and endpoint task, and shut down the
+guest. Hyper-V confirmed `Off` at 20:54:43 JST. RustDesk remains installed only in
+the stopped disposable guest. Local pinned-toolchain formatting, Clippy and the
+Windows x64 build passed; the source is unchanged from the merged, CI-tested agent.
+
+Successful settings readback, GUI comparison, connected unattended operation,
+other RustDesk versions and physical power-loss durability remain separate gates.
+No settings-write adapter is enabled. The offline blank-getter result leaves the
+live verification gate closed, even though the agent handles it correctly.
