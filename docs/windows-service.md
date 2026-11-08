@@ -111,6 +111,10 @@ Windows build/test results and the non-elevated storage-test failures. The host
 reported physical Dell hardware; service installation and reboot testing were
 therefore deferred to an isolated disposable VM.
 
+The subsequent [isolated VM record](windows-vm-validation.md) records passing
+elevated Windows tests, initial SCM/HTTPS reporting and service-token access
+checks. Its pending section identifies the runtime checks still outstanding.
+
 - Run `--detect` with RustDesk absent, installed 1.4.7, a different version and
   the RustDesk service stopped. Compare reported ID/settings to the actual UI.
 - Install under an explicitly selected test account; start, stop during a probe,
