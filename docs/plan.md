@@ -76,7 +76,10 @@ retry, cancellation, ordinary-user token access denial and unattended reboot che
 Ordinary-user CLI initialization rejection also passed. The subsequent
 [installed RustDesk 1.4.7 run](rustdesk-1.4.7-validation.md) verified blank-getter
 rejection and cancellation of a real CLI child. Successful live settings
-readback and the connected canary remain pending. The remaining gates below are
+readback and the connected canary remain pending. A subsequent
+[getter diagnosis](rustdesk-getter-diagnosis.md) resolved the blank ID by adding
+a disconnected adapter; settings getters remained blank and GUI comparison is
+still incomplete. The remaining gates below are
 planned validation, not a record of passing tests.
 
 ## Design and alternatives
