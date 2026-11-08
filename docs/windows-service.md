@@ -49,8 +49,8 @@ administrator-controlled absolute paths; quote all paths):
 The report path must be absolute and end in `.json`. Provision its directory first. Its ACL must permit the chosen service
 account to write while excluding untrusted writers; protect the executable and
 SCM configuration too. The skeleton does not set or verify these ACLs. Installation
-is an administrator action, outside this implementation; no installation commands
-have been run. Do not rely on an installer/SCM default that silently selects
+is an administrator action, outside this implementation; installation was tested
+only in the [isolated VM](windows-vm-validation.md). Do not rely on an installer/SCM default that silently selects
 LocalSystem. The service account remains an explicit deployment decision.
 
 The service probes and (when enrolled) polls immediately, then waits 60 seconds
@@ -112,8 +112,8 @@ reported physical Dell hardware; service installation and reboot testing were
 therefore deferred to an isolated disposable VM.
 
 The subsequent [isolated VM record](windows-vm-validation.md) records passing
-elevated Windows tests, initial SCM/HTTPS reporting and service-token access
-checks. Its pending section identifies the runtime checks still outstanding.
+elevated Windows tests, SCM/HTTPS reporting, service-token access, cancellation,
+retries and guest reboot. Its pending section identifies the checks still outstanding.
 
 - Run `--detect` with RustDesk absent, installed 1.4.7, a different version and
   the RustDesk service stopped. Compare reported ID/settings to the actual UI.

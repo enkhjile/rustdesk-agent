@@ -71,7 +71,9 @@ Repository tooling is configured: pinned Rust, Windows CI, cargo-deny policy,
 Renovate, local hooks and automatic semantic-release. The local cargo-deny audit passed on 2026-11-07.
 PRs #1–#4 passed hosted Windows x64 checks and dependency checks before merging;
 `v1.0.0-alpha.4` is published. PR #3 includes passing DPAPI/storage tests.
-Actual Windows service/UAC canary testing has not been completed. The remaining gates below are
+An [isolated Windows VM run](windows-vm-validation.md) passed SCM/HTTPS, service-SID,
+retry, cancellation and unattended reboot checks. Ordinary-user validation and
+the installed-RustDesk canary remain pending. The remaining gates below are
 planned validation, not a record of passing tests.
 
 ## Design and alternatives

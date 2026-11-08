@@ -22,7 +22,9 @@ UUID/origin and exclusively creates the Windows Known Folder ProgramData directo
 `RustDeskAgentState`. It never adopts or overwrites an existing directory. It does
 not prompt for elevation, generate identity, change credentials, contact a server,
 or install/start the service. A partial initialization requires investigation;
-rerunning cannot overwrite it. No provisioning command has been executed here.
+rerunning cannot overwrite it. Administrator initialization and service persistence
+were exercised only in the [isolated VM](windows-vm-validation.md); this is not
+deployment approval.
 
 The snapshot is bound to both enrolled UUID and management origin. Missing,
 invalid, oversized, inaccessible or mismatched state stops enrolled service startup.

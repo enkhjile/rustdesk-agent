@@ -84,7 +84,9 @@ Windows x64 builds require the MSVC C++ tools and SDK (including the TLS depende
 PR #3 passed hosted Windows tests, including DPAPI round-trip and protected-store
 creation/load checks. Access under the configured service SID, denial to an ordinary user and another service,
 reboot persistence and prompt-free behavior require Windows execution. These
-runtime checks have not been completed locally; do not deploy on compile evidence.
+runtime checks are tracked in the [isolated VM record](windows-vm-validation.md).
+Service-SID access, unrelated-service denial and unattended reboot passed there;
+ordinary-user validation remains pending. Do not deploy on compile evidence.
 
 Sources: [DPAPI machine scope and UI flags](https://learn.microsoft.com/en-us/windows/win32/api/dpapi/nf-dpapi-cryptprotectdata),
 [handle-based security inspection](https://learn.microsoft.com/en-us/windows/win32/api/aclapi/nf-aclapi-getsecurityinfo),

@@ -8,7 +8,7 @@ on PR #5. No agent code or RustDesk settings were changed.
 
 - Hyper-V generation 2 VM `RustDeskAgent-Validation`, guest `RDAGENT-LAB`.
 - Four virtual CPUs, 4 GiB RAM, 64 GiB dynamic OS disk, vTPM, **no network adapter**.
-- Windows 11 Pro, `10.0.26200`, installed from the host's existing Japanese 25H2
+- Windows 11 Pro 25H2, `10.0.26200.6584`, installed from the host's existing Japanese 25H2
   ISO, image index 3. Setup account: `RDAGENT-LAB\LabAdmin` (elevated).
 - Agent account: `NT AUTHORITY\LocalService`, service SID enabled/unrestricted.
   Agent SID: `S-1-5-80-312778130-3777190381-3969750968-319843892-2371153462`.
@@ -87,6 +87,34 @@ service shares the replacement file owner's account. Both token group lists
 were recorded, including their distinct service SIDs. It is not an assertion
 against administrators, SYSTEM or a compromised agent.
 
+## HTTP cancellation, retry and reboot results
+
+These checks completed on the real SCM service, not an in-process poller:
+
+| Check | Observed result |
+| --- | --- |
+| Pending report after a 503 | Revision 7, sequence 2 persisted before stop |
+| Restart with GET 204 / POST 503 | Three byte-identical POST attempts; revision 7 and sequence 2 retained |
+| Retry request spacing | 5.67 s then 9.62 s, including request overhead |
+| Stop during an eight-second POST delay | STOPPED in 252 ms; Win32/service exit codes 0 |
+| Stop during an eight-second GET delay | STOPPED in 251 ms; Win32/service exit codes 0 |
+| POST 204 acknowledgement | Pending report cleared durably |
+| Fresh observation before reboot | Revision 7, sequence 3, pending report retained after POST 503 |
+| Guest reboot | LastBootUpTime `2026-11-08T18:22:56.9498890+09:00`; service automatically RUNNING as LocalService, exit codes 0 |
+| Report after reboot | Same sequence-3 body acknowledged at `18:23:09+09:00`; committed state retained revision 7/sequence 3 and had `pending: null` |
+
+The harness changed only its own `C:\Lab\control.json`, used `Start-Service` and
+`Stop-Service RustDeskAgent`, checked `sc.exe queryex RustDeskAgent`, and read
+committed state plus request logs. Reboot command inside the guest was
+`shutdown.exe /r /t 5`. The endpoint and agent started after reboot without an
+interactive guest login or UAC approval. Host-side UAC approvals were required
+for the test orchestrator; they are distinct from guest service behavior.
+The final check confirmed the endpoint listened on `127.0.0.1:8443`, then stopped
+both the agent service and endpoint task.
+
+Executable SHA-256, independently read inside the guest:
+`6E11A0A2FEF767B2DF3E74A572238565743C5F1BBAB3C54341D56D50075E7A2C`.
+
 ## Pending checks and retained artifacts
 
 Ordinary-user validation is not yet complete. Launching the helper with
@@ -94,17 +122,20 @@ Ordinary-user validation is not yet complete. Launching the helper with
 harness result. A later limited scheduled-task attempt registered successfully,
 but returned `267011` (`0x41303`, not yet run) and produced no probe output within
 20 seconds. That is a harness prerequisite failure, not evidence of user access
-or denial. A diagnostic phase is prepared to inspect task settings and retry;
-Windows canceled its host UAC launch before it started. Start/stop during GET/POST, report retries across
-restart, guest reboot persistence, repeated/ordinary-user initialization and
-prompt-free operation after setup are still pending.
+or denial. Diagnostics identified task logon failure `2147943785` (Win32
+1385): the fresh dummy account lacked batch-logon rights. A guest-only grant of
+`SeBatchLogonRight` is prepared. Ordinary-user access and repeated/ordinary-user
+initialization are still pending; the HTTP/reboot results above are complete.
 
 Host scripts and raw transcripts remain under `target\validation\`; guest tools
 and logs are under `C:\Lab`. These local harness files are not shipped agent
-features. `runtime-validation.ps1` is the next elevated host step; it diagnoses
-the limited task and then runs the independent HTTP/reboot checks. The VM remains
-isolated and running; the agent was stopped after the access probes. No production
+features. `finish-user-check.ps1` is the next elevated host step. The VM remains
+isolated and running; the agent and endpoint were stopped after reboot validation. No production
 endpoint, real credential, RustDesk write, merge or release was involved.
+
+Remaining separate gates include installed RustDesk getter/IPC behavior and stop
+during an active CLI child, physical power-loss durability, and any future write
+adapter. This read-only run does not authorize settings writes or deployment.
 
 Setup issues were confined to the harness: host-side BCD hive collision (resolved
 by repair inside Windows PE), copied read-only WIM, automatically inserted MSR
