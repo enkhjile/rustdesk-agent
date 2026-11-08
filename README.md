@@ -1,6 +1,6 @@
 # RustDesk Windows agent — development slices
 
-This is an incomplete, non-deployable Windows x64 agent. It contains a strict desired-state parser, an in-memory revision guard, a read-only RustDesk detector and a Windows Service skeleton. An enrolled service now polls desired state over HTTPS and records acceptance/errors in local diagnostic snapshots; it never applies settings or sends status reports. Local [enrollment and credential storage](docs/enrollment.md) use machine-scoped DPAPI plus restrictive ACLs. PR #3 passed Windows DPAPI/storage tests; actual service-account access, reboot and UAC validation remain pending. Server registration, durable revision/report state, status delivery and the write adapter remain unimplemented. See [Windows usage and limits](docs/windows-service.md), [plan](docs/plan.md), and [contract fixture](docs/contract-testing.md).
+This is an incomplete, non-deployable Windows x64 agent. It contains a strict desired-state parser, a durable management revision guard, a read-only RustDesk detector and a Windows Service skeleton. An enrolled service now polls desired state over HTTPS and records acceptance/errors in local diagnostic snapshots; it sends durable read-only status reports but never applies settings. Enrolled installations require explicit [state initialization](docs/state.md) before service startup. Local [enrollment and credential storage](docs/enrollment.md) use machine-scoped DPAPI plus restrictive ACLs. PR #3 passed Windows DPAPI/storage tests; actual service-account access, reboot and UAC validation remain pending. Server registration and the write adapter remain unimplemented. See [Windows usage and limits](docs/windows-service.md), [plan](docs/plan.md), and [contract fixture](docs/contract-testing.md).
 
 ## Repository layout
 
@@ -11,7 +11,8 @@ src/lib.rs          Desired-state parsing, reconciliation and backoff
 src/detection.rs    Read-only query allowlist and output parsing
 src/probe.rs        Bounded CLI process runner
 src/windows/       Windows SCM lifecycle and protected enrollment storage
-src/management.rs   Authenticated read-only HTTPS polling and retry scheduling
+src/management.rs   Authenticated polling and durable status delivery
+src/state.rs        Validated revision/sequence/outbox snapshot
 src/enrollment.rs   Validated device identity, origin and credential record
 tests/reconcile.rs  Tests using an in-memory settings adapter
 docs/plan.md        Design, evidence, milestones and validation gates

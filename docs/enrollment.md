@@ -60,7 +60,7 @@ Debug output redacts the credential. Error messages do not include input values.
    Console administrator API key as the device credential.
 4. `rustdesk-agent.exe --enrollment-info` loads and validates the store, printing
    only UUID and origin. The read-only service also loads it at startup and includes
-   those public fields in snapshots. Restart the service after initial enrollment.
+   those public fields in snapshots. Run the administrator-only [state initialization](state.md) once after enrollment and before starting an enrolled service.
 
 Origins must use HTTPS and contain no userinfo, path beyond `/`, query or fragment.
 Enrollment itself only stores the endpoint. The service connects after restart;

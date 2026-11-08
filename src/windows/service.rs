@@ -91,6 +91,13 @@ fn service_main(_: Vec<OsString>) {
     let _ = publish(handle, ServiceState::Stopped, result.is_err());
 }
 
+fn observed(value: &rustdesk_agent::detection::Observation) -> Option<String> {
+    match value {
+        rustdesk_agent::detection::Observation::Observed(value) => Some(value.clone()),
+        _ => None,
+    }
+}
+
 fn run(
     handle: ServiceStatusHandle,
     mut stop: watch::Receiver<bool>,
@@ -109,7 +116,10 @@ fn run(
     let enrollment_info = enrollment.as_ref().map(|value| value.info());
     runtime.block_on(async {
         let mut poller = enrollment
-            .map(rustdesk_agent::management::Poller::new)
+            .map(|enrollment| -> Result<_, Box<dyn std::error::Error>> {
+                let store = rustdesk_agent::state_store::FileStore::open()?;
+                Ok(rustdesk_agent::management::Poller::new(enrollment, store)?)
+            })
             .transpose()?;
         loop {
             // Cancelling detection drops its child with kill_on_drop enabled.
@@ -122,10 +132,13 @@ fn run(
                 Some(poller) => tokio::select! {
                     biased;
                     _ = stop.changed() => break,
-                    observation = poller.poll() => Some(observation),
+                    observation = poller.poll(observed(&detection.rustdesk_id), observed(&detection.version)) => Some(observation),
                 },
                 None => None,
             };
+            if management.as_ref().is_some_and(|value| matches!(value.status, rustdesk_agent::management::PollStatus::StorageError)) {
+                return Err("management state persistence failed".into());
+            }
             let delay = management
                 .as_ref()
                 .map_or(60, |value| value.next_poll_seconds);

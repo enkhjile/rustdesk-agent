@@ -4,14 +4,14 @@ extern crate self as rustdesk_agent;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Setting {
     ApproveMode,
     VerificationMethod,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct DesiredState {
     pub schema_version: u32,
@@ -19,12 +19,20 @@ pub struct DesiredState {
     pub settings: Settings,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Settings {
-    #[serde(default, deserialize_with = "present_setting")]
+    #[serde(
+        default,
+        deserialize_with = "present_setting",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub approve_mode: Option<ApproveMode>,
-    #[serde(default, deserialize_with = "present_setting")]
+    #[serde(
+        default,
+        deserialize_with = "present_setting",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub verification_method: Option<VerificationMethod>,
 }
 
@@ -37,14 +45,14 @@ where
     T::deserialize(deserializer).map(Some)
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub enum ApproveMode {
     Password,
     Click,
     PasswordClick,
 }
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub enum VerificationMethod {
     UseTemporaryPassword,
@@ -216,3 +224,9 @@ pub mod enrollment;
 pub mod credentials;
 
 pub mod management;
+
+pub mod state;
+
+#[cfg(windows)]
+#[path = "windows/state_store.rs"]
+pub mod state_store;

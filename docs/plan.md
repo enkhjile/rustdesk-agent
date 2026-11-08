@@ -35,12 +35,12 @@ Scope: Windows x64 companion service, no production server changes or RustDesk m
    runtime validation. Exit: Windows x64 build plus service
    restart, non-admin access and no-post-install-UAC tests pass. No RustDesk writes
    in this milestone; LocalSystem only with evidence that it is required.
-5. **Authenticated polling and durable state (read-only polling implemented; durability pending).**
+5. **Authenticated polling and durable state (read-only slice implemented; Windows runtime gates pending).**
    Fixed-origin HTTPS polling now uses enrollment, certificate validation, no redirects,
    bounded bodies, deadlines, stop-aware service integration, and capped retry with jitter.
-   Acceptance/errors are local diagnostics only; no reconciliation or status delivery.
-   Next, persist accepted
-   desired state before settings I/O; retain the latest pending report durably.
+   Accepted state, observation sequence and latest pending report are now persisted
+   together. Status delivery reports `unsupported` with null applied revision until
+   live verification is enabled. See [state initialization and recovery](state.md).
    Exit: isolated tests cover restart/crash boundaries, authentication failures,
    stale state, report retries, malformed responses and network outages.
 6. **Verified adapter and canary (pending; needs 1 and 5).** Invoke only fixed
@@ -50,8 +50,8 @@ Scope: Windows x64 companion service, no production server changes or RustDesk m
    connection behavior, reboot persistence and service/UAC tests pass on the
    disposable client before any separately authorized rollout.
 
-Keep one crate and add each module only when its milestone begins. The revision guard is implemented in memory; durable restart protection and status delivery remain
-in milestone 5. Read-only polling must not be mistaken for applied-state reporting. The Windows probe is the prerequisite
+Keep one crate and add each module only when its milestone begins. The core revision guard remains in-memory; management now restores and persists
+its watermark and latest report in milestone 5. Read-only polling must not be mistaken for applied-state reporting. The Windows probe is the prerequisite
 for validating an account and enabling writes. Service skeleton development can
 proceed from source evidence with runtime behavior explicitly unverified. No production changes,
 credential changes or deployment are part of these implementation milestones.
@@ -69,8 +69,8 @@ and retention of accepted revisions after application failure. See the [contract
 
 Repository tooling is configured: pinned Rust, Windows CI, cargo-deny policy,
 Renovate, local hooks and automatic semantic-release. The local cargo-deny audit passed on 2026-11-07.
-PRs #1–#3 passed hosted Windows x64 checks and dependency checks before merging;
-`v1.0.0-alpha.3` is published. PR #3 includes passing DPAPI/storage tests.
+PRs #1–#4 passed hosted Windows x64 checks and dependency checks before merging;
+`v1.0.0-alpha.4` is published. PR #3 includes passing DPAPI/storage tests.
 Actual Windows service/UAC canary testing has not been completed. The remaining gates below are
 planned validation, not a record of passing tests.
 
@@ -80,7 +80,7 @@ Use one-way desired state with per-setting read/apply/readback. A standalone ser
 
 Revision numbers are monotonically increasing per device. Reject stale revisions and reject reused revision with a different payload in the service/backend. Reconcile periodically even at the same revision to detect drift; report applied revision only when every requested value has been observed after application. Partial changes remain partial and are retried; no automatic rollback is implied. The core deliberately has no shell or generic command interface. The platform must authenticate the request before parsing state, enforce HTTPS, and bind UUID to the credential rather than trusting a caller-provided ID.
 
-## State and failure rules (planned)
+## State and failure rules
 
 - Track **accepted state** separately from **applied revision**. Atomically persist
   the highest accepted revision and its parsed settings before any write. A failed
@@ -95,8 +95,7 @@ Revision numbers are monotonically increasing per device. Reject stale revisions
 - Keep one reconciliation cycle active at a time. Persist the latest report;
   retries must not overwrite a newer report with an older one. A later observation
   can supersede an unsent report for the same revision. Backend receipt time alone
-  is insufficient for ordering; use the contract's per-device observation sequence. Agent-side durable sequence
-  storage remains pending.
+  is insufficient for ordering; use the contract's per-device observation sequence. Agent-side sequence storage is implemented with the pending report.
 - A successful initial read already verifies an unchanged setting. After a write,
   require a matching readback. Settings are not transactional: partial success
   remains partial, and no automatic rollback is implied.
@@ -127,4 +126,4 @@ the proposed wire contract. Add modules only as their milestone is implemented:
 `src/management.rs` now handles read-only HTTPS polling and in-memory revision acceptance, `src/windows/` now holds SCM lifecycle, `src/probe.rs` the bounded read-only
 CLI runner, and `src/main.rs` the Windows entry point. Credential storage now lives in `src/windows/credentials.rs` with portable
 validation in `src/enrollment.rs`; read-only management polling is integrated. Keep the test backend separate from the installed agent.
-No empty modules or extra workspace crates are needed now.
+`src/state.rs` defines the bounded snapshot and report, while `src/windows/state_store.rs` owns protected file replacement and writer locking. No extra workspace crates are needed.

@@ -1,5 +1,10 @@
-//! Read-only desired-state polling. No settings adapter or status transport.
-use crate::{RevisionGuard, backoff_seconds, enrollment::Enrollment, parse_desired};
+//! Durable desired-state acceptance and read-only status delivery. No settings adapter.
+use crate::{
+    backoff_seconds,
+    enrollment::Enrollment,
+    parse_desired,
+    state::{DurableState, StateStore},
+};
 use reqwest::{Client, ClientBuilder, header};
 use serde::Serialize;
 use std::time::{Duration, SystemTime};
@@ -17,12 +22,16 @@ pub enum PollStatus {
     HttpError { status: u16 },
     TransportError,
     Timeout,
+    Delivered,
+    DeliveryRejected { status: u16 },
+    StorageError,
 }
 
 /// Local diagnostics only: acceptance is not application or verification.
 #[derive(Debug, Serialize)]
 pub struct PollObservation {
     pub status: PollStatus,
+    pub delivery: Option<PollStatus>,
     pub accepted_revision: Option<u64>,
     pub next_poll_seconds: u64,
 }
@@ -30,7 +39,10 @@ pub struct PollObservation {
 pub struct Poller {
     client: Client,
     enrollment: Enrollment,
-    guard: RevisionGuard,
+    state: DurableState,
+    store: Box<dyn StateStore>,
+    poisoned: bool,
+    report_failures: u32,
     failures: u32,
 }
 
@@ -46,23 +58,54 @@ fn client_builder() -> ClientBuilder {
 }
 
 impl Poller {
-    pub fn new(enrollment: Enrollment) -> Result<Self, &'static str> {
+    pub fn new(
+        enrollment: Enrollment,
+        mut store: impl StateStore + 'static,
+    ) -> Result<Self, &'static str> {
         enrollment.validate()?;
+        let state = DurableState::decode(
+            &store.load().map_err(|_| "state_load_failed")?,
+            &enrollment.info(),
+        )?;
         Ok(Self {
             client: client_builder()
                 .build()
                 .map_err(|_| "http_client_initialization_failed")?,
             enrollment,
-            guard: RevisionGuard::default(),
+            state,
+            store: Box::new(store),
+            poisoned: false,
+            report_failures: 0,
             failures: 0,
         })
     }
 
     /// Dropping this future cancels the in-flight request. The caller owns the
     /// stop-aware wait; never run overlapping polls for the same enrollment.
-    pub async fn poll(&mut self) -> PollObservation {
-        let (status, retry_after) = self.fetch().await;
-        let next_poll_seconds =
+    pub async fn poll(&mut self, id: Option<String>, version: Option<String>) -> PollObservation {
+        if self.poisoned {
+            return PollObservation {
+                status: PollStatus::StorageError,
+                delivery: None,
+                accepted_revision: self.state.accepted.as_ref().map(|s| s.revision),
+                next_poll_seconds: 300,
+            };
+        }
+        // Retry the exact durable report before a fresh observation can supersede it.
+        let mut delivery = if self.state.pending.is_some() {
+            Some(self.deliver().await)
+        } else {
+            None
+        };
+        let (status, retry_after) = if self.poisoned {
+            (PollStatus::StorageError, None)
+        } else {
+            self.fetch(id, version).await
+        };
+        if delivery.is_none() && self.state.pending.is_some() && !self.poisoned {
+            delivery = Some(self.deliver().await);
+        }
+        let mut next_poll_seconds =
             if matches!(status, PollStatus::Accepted { .. } | PollStatus::Unassigned) {
                 self.failures = 0;
                 60
@@ -71,14 +114,111 @@ impl Poller {
                 self.failures = self.failures.saturating_add(1);
                 seconds
             };
+        if let Some((result, retry_after)) = &delivery {
+            if matches!(
+                result,
+                PollStatus::Delivered | PollStatus::DeliveryRejected { .. }
+            ) {
+                self.report_failures = 0;
+            } else {
+                let delay =
+                    retry_delay(self.report_failures, *retry_after, Uuid::new_v4().as_u128());
+                self.report_failures = self.report_failures.saturating_add(1);
+                next_poll_seconds =
+                    if matches!(status, PollStatus::Accepted { .. } | PollStatus::Unassigned) {
+                        delay
+                    } else {
+                        next_poll_seconds.max(delay)
+                    };
+            }
+        }
         PollObservation {
-            status,
-            accepted_revision: self.guard.accepted().map(|state| state.revision),
+            status: if self.poisoned {
+                PollStatus::StorageError
+            } else {
+                status
+            },
+            delivery: delivery.map(|(status, _)| status),
+            accepted_revision: self.state.accepted.as_ref().map(|state| state.revision),
             next_poll_seconds,
         }
     }
 
-    async fn fetch(&mut self) -> (PollStatus, Option<u64>) {
+    fn commit(&mut self, next: DurableState) -> Result<(), ()> {
+        let result = next
+            .encode()
+            .map_err(|_| ())
+            .and_then(|bytes| self.store.save(&bytes).map_err(|_| ()));
+        if result.is_err() {
+            self.poisoned = true;
+            return Err(());
+        }
+        self.state = next;
+        Ok(())
+    }
+
+    async fn deliver(&mut self) -> (PollStatus, Option<u64>) {
+        let Some(report) = self.state.pending.as_ref() else {
+            return (PollStatus::Delivered, None);
+        };
+        let body = match serde_json::to_vec(report) {
+            Ok(body) => body,
+            Err(_) => {
+                self.poisoned = true;
+                return (PollStatus::StorageError, None);
+            }
+        };
+        let mut endpoint = self.enrollment.info().management_origin;
+        endpoint.set_path("/v1/agent/status");
+        let token = Zeroizing::new(format!("Bearer {}", self.enrollment.credential()));
+        let mut authorization =
+            header::HeaderValue::from_str(&token).expect("validated enrollment token");
+        authorization.set_sensitive(true);
+        let response = match self
+            .client
+            .post(endpoint)
+            .header(header::AUTHORIZATION, authorization)
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(body)
+            .send()
+            .await
+        {
+            Ok(response) => response,
+            Err(error) => return (transport_error(error), None),
+        };
+        let code = response.status().as_u16();
+        if code == 204 || matches!(code, 400 | 403 | 409) {
+            let mut next = self.state.clone();
+            next.pending = None;
+            if self.commit(next).is_err() {
+                return (PollStatus::StorageError, None);
+            }
+            return (
+                if code == 204 {
+                    PollStatus::Delivered
+                } else {
+                    PollStatus::DeliveryRejected { status: code }
+                },
+                None,
+            );
+        }
+        let retry_after = if code == 429 || response.status().is_server_error() {
+            response
+                .headers()
+                .get(header::RETRY_AFTER)
+                .and_then(|v| v.to_str().ok())
+                .and_then(|v| parse_retry_after(v, SystemTime::now()))
+        } else {
+            None
+        };
+        (PollStatus::HttpError { status: code }, retry_after)
+    }
+
+    async fn fetch(
+        &mut self,
+        id: Option<String>,
+        version: Option<String>,
+    ) -> (PollStatus, Option<u64>) {
         // Only this locally provisioned origin can receive the credential.
         let mut endpoint = self.enrollment.info().management_origin;
         endpoint.set_path("/v1/agent/desired");
@@ -169,7 +309,9 @@ impl Poller {
             }
         }
         let result = parse_desired(&body).and_then(|state| {
-            self.guard.accept(&state)?;
+            let mut next = self.state.clone();
+            next.observe(&state, id, version)?;
+            self.commit(next).map_err(|_| "state_save_failed")?;
             Ok(state.revision)
         });
         (
