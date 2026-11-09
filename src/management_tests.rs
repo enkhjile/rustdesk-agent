@@ -479,12 +479,60 @@ async fn managed_storage_failure_stops_writes_and_cancellation_retains_uncertain
     );
     assert!(started);
     drop(poller);
-    let restored = restored_poller(&fixture, store);
-    let pending = serde_json::to_value(restored.state.pending.unwrap()).unwrap();
+    let mut restored = restored_poller(&fixture, store.clone());
+    let pending = serde_json::to_value(restored.state.pending.as_ref().unwrap()).unwrap();
     assert_eq!(pending["results"]["approve_mode"], "indeterminate");
     assert_eq!(pending["results"]["verification_method"], "indeterminate");
     assert!(pending["applied_revision"].is_null());
     assert!(fixture.attempts().is_empty());
+
+    let desired = serde_json::to_value(restored.state.accepted.as_ref().unwrap()).unwrap();
+    fixture.assign(support::A, desired.clone()).unwrap();
+    respond(&fixture, 204, "");
+    fixture.status_response(Some(StatusCode::SERVICE_UNAVAILABLE));
+    let mut calls = 0;
+    restored
+        .poll_applying(None, None, |_, _| {
+            calls += 1;
+            std::future::ready(SettingResult::UnverifiedCliMatch)
+        })
+        .await;
+    let first = fixture.attempts()[0].clone();
+    drop(restored);
+    let mut restored = restored_poller(&fixture, store);
+    fixture.status_response(None);
+    restored
+        .poll_applying(None, None, |_, _| {
+            calls += 1;
+            std::future::ready(SettingResult::UnverifiedCliMatch)
+        })
+        .await;
+    assert_eq!(
+        calls, 0,
+        "interrupted reports must not reapply cached state"
+    );
+    assert_eq!(fixture.attempts()[1], first);
+    assert_eq!(fixture.latest(support::A).unwrap(), pending);
+
+    respond(&fixture, 200, &desired.to_string());
+    restored
+        .poll_applying(None, None, |_, _| {
+            calls += 1;
+            std::future::ready(SettingResult::UnverifiedCliMatch)
+        })
+        .await;
+    let resumed = fixture.latest(support::A).unwrap();
+    assert_eq!(calls, 2);
+    assert_eq!(
+        resumed["observation_sequence"].as_u64().unwrap(),
+        pending["observation_sequence"].as_u64().unwrap() + 1
+    );
+    assert!(resumed["applied_revision"].is_null());
+    assert_eq!(resumed["results"]["approve_mode"], "unverified_cli_match");
+    assert_eq!(
+        resumed["results"]["verification_method"],
+        "unverified_cli_match"
+    );
 }
 impl crate::state::StateStore for FailSave {
     fn load(&mut self) -> std::io::Result<Vec<u8>> {
