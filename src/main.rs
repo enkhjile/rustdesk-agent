@@ -3,6 +3,10 @@
 mod service;
 
 #[cfg(all(windows, target_arch = "x86_64"))]
+#[path = "windows/setter_lock.rs"]
+mod setter_lock;
+
+#[cfg(all(windows, target_arch = "x86_64"))]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use std::path::PathBuf;
     let args: Vec<_> = std::env::args_os().skip(1).collect();
@@ -47,6 +51,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             args[2].to_str().ok_or("invalid setting")?,
             args[3].to_str().ok_or("invalid value")?,
         )?;
+        // Keep ownership on this thread through version check, write and readback.
+        let _settings_lock = setter_lock::SettingsLock::acquire()?;
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?;

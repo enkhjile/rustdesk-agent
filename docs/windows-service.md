@@ -71,7 +71,22 @@ A readback mismatch prints the report and exits nonzero. This command is not
 connected to polling or reconciliation; management still reports `unsupported`
 with null applied revision. See [isolated setter validation](validation/2026-11-09-official-cli-setters.md).
 
-Run setting commands sequentially. In the
+Explicit `--set-option` invocations now share a machine-wide Windows mutex across
+sessions and accounts. It covers the version check, write and CLI readback for
+both allowed keys, regardless of executable path. A contender waits at most
+three seconds for the lock, then exits nonzero with `Settings busy` before
+launching a RustDesk command. Lock creation/access errors also fail closed.
+The mutex grants synchronization/release access to its creator, administrators,
+SYSTEM and LocalService; it is not a RustDesk authorization boundary.
+
+If Windows reports abandoned ownership, the invocation exits nonzero and asks
+the operator to inspect settings before retrying. This does not roll back a
+partial write or guarantee cleanup of a child left by abrupt process death.
+The lock is specific to this CLI entry point: older agents, direct library calls,
+RustDesk GUI and other writers do not participate. Mismatch detection remains
+necessary, and automatic retries/writes are still disabled.
+
+In the pre-serialization
 [concurrency test](validation/2026-11-09-concurrent-settings.md), overlapping
 changes to the two allowed keys lost one requested update in 4/20 rounds; each
 affected invocation detected a readback mismatch and exited nonzero. Inspect
