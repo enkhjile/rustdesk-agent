@@ -12,6 +12,7 @@ A record's remaining-gates section describes that run, not the current project b
 | [Installed RustDesk 1.4.7 — November 8](2026-11-08-rustdesk-1.4.7-getters.md) | Blank getters and cancellation of a real CLI child. Later diagnosis explains the blank ID/defaults. |
 | [Getter diagnosis and GUI — November 8](2026-11-08-getter-diagnosis-and-gui.md) | Missing-NIC ID diagnosis and GUI defaults alongside blank CLI settings. Later setter tests cover non-default values. |
 | [Official setter — November 9](2026-11-09-official-cli-setters.md) | Actual agent setters as administrator/LocalService, persistence, restoration and hosted CI. Independent live connection verification remains outstanding. |
+| [Setter modes, deadline and connections — November 9](2026-11-09-setter-modes-and-timeout.md) | Remaining values under both accounts, locked GUI comparison, real setter timeout, and successful click-approved and temporary-password connections on a private two-VM network. |
 
-All runtime work used a disposable isolated Windows VM and dummy credentials.
+All runtime work used disposable isolated Windows VMs and dummy credentials.
 These records do not authorize production deployment or automatic service writes.

@@ -2,8 +2,8 @@
 
 Scope: Windows x64 companion agent using official RustDesk. No custom client,
 direct TOML editing, permanent-password provisioning or production deployment.
-This document describes the current branch, including the explicit setter in
-PR #12; dated results belong in the [validation archive](validation/README.md).
+This document describes the current branch, including the explicit setter merged
+in PR #12; dated results belong in the [validation archive](validation/README.md).
 
 ## Implemented and validated
 
@@ -30,12 +30,19 @@ that limitation is not evidence that setters need a custom client.
 
 ## Next work and remaining gates
 
-1. **Finish isolated setter behavior tests.** Test the remaining approval value
-   (`password-click`) and permanent-only verification mode without provisioning
-   a password. Compare settings with the GUI and actual incoming connection
-   behavior. Test disabled settings, RustDesk unavailable, cancellation during a
-   real setter and whole-map/concurrent changes. Keep command acceptance, CLI
-   readback and independently verified behavior distinct.
+1. **Finish isolated setter behavior tests.** All six allowed values now have CLI
+   runtime coverage across the two setter runs. The remaining modes
+   (`password-click` and permanent-only verification) also matched the locked GUI,
+   and a real stalled setter hit its deadline and was terminated; see the
+   [runtime record](validation/2026-11-09-setter-modes-and-timeout.md).
+   Private two-VM tests also confirmed click acceptance with `password-click`
+   and temporary-password authentication with `password`, both using
+   `use-temporary-password`. A repeat test rejected the previously working
+   temporary password after switching to permanent-only verification.
+   Other connection combinations, disabled settings, all RustDesk processes
+   unavailable, abrupt agent termination and whole-map/concurrent changes remain
+   untested. Keep command acceptance, CLI readback, GUI state and connection
+   behavior distinct.
 2. **Define verified automatic application.** Establish what evidence is sufficient
    for a per-setting `verified` result before connecting the adapter to polling.
    Exercise revision changes, drift, partial outcomes and status against actual
