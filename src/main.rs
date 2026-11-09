@@ -42,10 +42,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let report = runtime.block_on(rustdesk_agent::probe::detect(&executable));
         println!("{}", serde_json::to_string_pretty(&report)?);
         Ok(())
+    } else if args.len() == 4 && args[0] == "--set-option" {
+        let change = rustdesk_agent::setter::Change::parse(
+            args[2].to_str().ok_or("invalid setting")?,
+            args[3].to_str().ok_or("invalid value")?,
+        )?;
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+        let report = runtime
+            .block_on(rustdesk_agent::setter::set_option(
+                &PathBuf::from(&args[1]),
+                change,
+            ))
+            .map_err(|error| format!("Settings command failed: {error:?}"))?;
+        println!("{}", serde_json::to_string_pretty(&report)?);
+        if !report.readback_matches {
+            return Err("Settings command accepted, but CLI readback did not match".into());
+        }
+        Ok(())
     } else if args.len() == 3 && args[0] == "--service" {
         service::dispatch(PathBuf::from(&args[1]), PathBuf::from(&args[2]))
     } else {
-        Err("Usage: rustdesk-agent --enroll <https-origin> (credential on stdin) | --init-state | --enrollment-info | --detect <absolute RustDesk.exe path> | --service <absolute RustDesk.exe path> <absolute report.json path>".into())
+        Err("Usage: rustdesk-agent --enroll <https-origin> (credential on stdin) | --init-state | --enrollment-info | --detect <absolute RustDesk.exe path> | --set-option <absolute RustDesk.exe path> <setting> <value> | --service <absolute RustDesk.exe path> <absolute report.json path>".into())
     }
 }
 

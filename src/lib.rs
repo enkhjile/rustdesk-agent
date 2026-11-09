@@ -217,6 +217,9 @@ pub mod detection;
 #[cfg(any(windows, test))]
 pub mod probe;
 
+#[cfg(any(windows, test))]
+pub mod setter;
+
 pub mod enrollment;
 
 #[cfg(windows)]

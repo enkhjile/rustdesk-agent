@@ -23,7 +23,7 @@ async fn read_output(stream: impl AsyncRead + Unpin) -> Result<Vec<u8>, Observat
     }
 }
 
-async fn capture(
+pub(crate) async fn capture(
     command: &mut Command,
     timeout: Duration,
 ) -> Result<(bool, Vec<u8>, Vec<u8>), Observation> {

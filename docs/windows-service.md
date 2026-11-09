@@ -2,7 +2,8 @@
 
 This development slice targets Windows x64. It is not ready for kiosk deployment.
 It implements SCM start/stop/shutdown, read-only HTTPS polling when enrolled, and
-local diagnostic snapshots. There is no settings application. [Durable state and status delivery](state.md) require administrator initialization before starting an enrolled service. Local [enrollment and credential
+local diagnostic snapshots. The service does not apply settings; an explicit local
+one-shot setter is described below. [Durable state and status delivery](state.md) require administrator initialization before starting an enrolled service. Local [enrollment and credential
 storage](enrollment.md) are implemented but require Windows runtime validation.
 No service is installed automatically and no elevation is requested by the agent.
 
@@ -21,7 +22,7 @@ signature, installation provenance and ACL validation are still deployment gates
 the agent currently checks only path/file presence, not MSI registration or
 Authenticode. It does not search PATH, run a shell or auto-install RustDesk.
 
-The only child commands are `--version`, `--get-id`, `--option approve-mode` and
+The detector's only child commands are `--version`, `--get-id`, `--option approve-mode` and
 `--option verification-method`. Version is queried first; only exact `1.4.7`
 continues to the other queries. Other versions are not automatically trusted.
 Each command has a three-second timeout and a 4 KiB limit on each output stream.
@@ -38,9 +39,37 @@ blank option output. `live_state_verified` is always false. These local diagnost
 statuses do not change management reports: results remain `unsupported` and
 applied revision remains null. RustDesk can fall back to cached
 configuration during IPC failures; even its getter commands can update local
-caches internally. The agent issues no modifying CLI commands and never edits
-RustDesk TOML. Selecting a password verification mode and delivering a permanent
-password are separate operations; neither is implemented in this slice.
+caches internally. The detector issues no modifying CLI commands. The agent never
+edits RustDesk TOML or provisions permanent passwords.
+
+## Explicit local setting command
+
+For an authorized local change using the official installed RustDesk 1.4.7:
+
+```powershell
+& .\target\debug\rustdesk-agent.exe --set-option 'C:\Program Files\RustDesk\rustdesk.exe' approve-mode click
+```
+
+Only `approve-mode` (`password`, `click`, `password-click`) and
+`verification-method` (`use-temporary-password`, `use-permanent-password`,
+`use-both-passwords`) are accepted. Selecting a verification mode does not create
+a password. Empty values, other settings and arbitrary arguments are rejected.
+Use the same trusted absolute executable path requirements as the detector.
+
+The command checks version, invokes one setter, then reads the setting back, with
+the same three-second deadline and 4 KiB stream limits for each subprocess.
+It never requests elevation, starts a shell, retries or rolls back automatically.
+Nonzero exit, stderr or non-whitespace setter stdout fail the command, including
+RustDesk diagnostics emitted with exit zero. Failure or cancellation may occur
+after a setting changes; inspect the result before manually retrying.
+
+JSON separates `command_accepted` from `readback_matches`. The readback retains
+its `unverified_cli_value`/`ambiguous_default`/failure status and
+`live_state_verified` remains false because CLI fallback is possible. Exit zero
+means acceptance plus matching CLI readback, not verified connection behavior.
+A readback mismatch prints the report and exits nonzero. This command is not
+connected to polling or reconciliation; management still reports `unsupported`
+with null applied revision. See [isolated setter validation](official-setter-validation.md).
 
 A separate direct IPC reader is not a supported workaround for 1.4.7: the
 [Windows main IPC authorization](https://github.com/rustdesk/rustdesk/blob/1.4.7/src/ipc/auth.rs#L660)
