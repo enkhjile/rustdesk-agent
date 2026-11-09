@@ -71,6 +71,12 @@ A readback mismatch prints the report and exits nonzero. This command is not
 connected to polling or reconciliation; management still reports `unsupported`
 with null applied revision. See [isolated setter validation](validation/2026-11-09-official-cli-setters.md).
 
+Run setting commands sequentially. In the
+[concurrency test](validation/2026-11-09-concurrent-settings.md), overlapping
+changes to the two allowed keys lost one requested update in 4/20 rounds; each
+affected invocation detected a readback mismatch and exited nonzero. Inspect
+both settings after a mismatch rather than assuming the other change survived.
+
 The [unavailable-process test](validation/2026-11-09-unavailable-processes.md)
 confirmed that setters can return matching readback while the RustDesk service
 is disabled and background processes are absent. Offline results differed by
