@@ -1,9 +1,9 @@
-//! Durable desired-state acceptance and read-only status delivery. No settings adapter.
+//! Durable desired-state acceptance; application is opt-in and never claims verification.
 use crate::{
-    backoff_seconds,
+    Setting, backoff_seconds,
     enrollment::Enrollment,
     parse_desired,
-    state::{DurableState, StateStore},
+    state::{DurableState, SettingResult, StateStore},
 };
 use reqwest::{Client, ClientBuilder, header};
 use serde::Serialize;
@@ -50,6 +50,8 @@ fn client_builder() -> ClientBuilder {
     let _ = rustls::crypto::ring::default_provider().install_default();
     Client::builder()
         .https_only(true)
+        // Keep the lab hostname on loopback, independent of DNS/hosts changes.
+        .resolve("localhost", std::net::SocketAddr::from(([127, 0, 0, 1], 0)))
         .no_proxy()
         .redirect(reqwest::redirect::Policy::none())
         .retry(reqwest::retry::never())
@@ -83,6 +85,54 @@ impl Poller {
     /// Dropping this future cancels the in-flight request. The caller owns the
     /// stop-aware wait; never run overlapping polls for the same enrollment.
     pub async fn poll(&mut self, id: Option<String>, version: Option<String>) -> PollObservation {
+        self.poll_with(
+            id,
+            version,
+            None::<fn(Setting, &'static str) -> std::future::Ready<SettingResult>>,
+        )
+        .await
+    }
+
+    /// Lab-only application, requiring a fresh authenticated desired response.
+    /// The callback must be cancellation-safe. No callback can claim `verified`.
+    #[cfg(any(feature = "lab-apply", test))]
+    pub async fn poll_applying<F, Fut>(
+        &mut self,
+        id: Option<String>,
+        version: Option<String>,
+        apply: F,
+    ) -> PollObservation
+    where
+        F: FnMut(Setting, &'static str) -> Fut,
+        Fut: std::future::Future<Output = SettingResult>,
+    {
+        if self.enrollment.info().management_origin.host_str() != Some("localhost")
+            && !matches!(self.enrollment.info().management_origin.host(),
+            Some(url::Host::Ipv4(ip)) if ip.is_loopback())
+            && !matches!(self.enrollment.info().management_origin.host(), Some(url::Host::Ipv6(ip)) if ip.is_loopback())
+        {
+            return PollObservation {
+                status: PollStatus::Rejected {
+                    reason: "lab_requires_loopback_origin",
+                },
+                delivery: None,
+                accepted_revision: self.state.accepted.as_ref().map(|s| s.revision),
+                next_poll_seconds: 300,
+            };
+        }
+        self.poll_with(id, version, Some(apply)).await
+    }
+
+    async fn poll_with<F, Fut>(
+        &mut self,
+        id: Option<String>,
+        version: Option<String>,
+        mut apply: Option<F>,
+    ) -> PollObservation
+    where
+        F: FnMut(Setting, &'static str) -> Fut,
+        Fut: std::future::Future<Output = SettingResult>,
+    {
         if self.poisoned {
             return PollObservation {
                 status: PollStatus::StorageError,
@@ -100,7 +150,7 @@ impl Poller {
         let (status, retry_after) = if self.poisoned {
             (PollStatus::StorageError, None)
         } else {
-            self.fetch(id, version).await
+            self.fetch(id, version, &mut apply).await
         };
         if delivery.is_none() && self.state.pending.is_some() && !self.poisoned {
             delivery = Some(self.deliver().await);
@@ -214,11 +264,16 @@ impl Poller {
         (PollStatus::HttpError { status: code }, retry_after)
     }
 
-    async fn fetch(
+    async fn fetch<F, Fut>(
         &mut self,
         id: Option<String>,
         version: Option<String>,
-    ) -> (PollStatus, Option<u64>) {
+        apply: &mut Option<F>,
+    ) -> (PollStatus, Option<u64>)
+    where
+        F: FnMut(Setting, &'static str) -> Fut,
+        Fut: std::future::Future<Output = SettingResult>,
+    {
         // Only this locally provisioned origin can receive the credential.
         let mut endpoint = self.enrollment.info().management_origin;
         endpoint.set_path("/v1/agent/desired");
@@ -311,12 +366,32 @@ impl Poller {
         let result = parse_desired(&body).and_then(|state| {
             let mut next = self.state.clone();
             next.observe(&state, id, version)?;
+            if apply.is_some() {
+                for (key, _) in state.pairs() {
+                    next.pending
+                        .as_mut()
+                        .unwrap()
+                        .set_result(key, SettingResult::Indeterminate);
+                }
+            }
             self.commit(next).map_err(|_| "state_save_failed")?;
-            Ok(state.revision)
+            Ok(state)
         });
+        if let (Ok(state), Some(apply)) = (&result, apply) {
+            for (key, wanted) in state.pairs() {
+                let outcome = apply(key, wanted).await;
+                let mut next = self.state.clone();
+                next.pending.as_mut().unwrap().set_result(key, outcome);
+                if self.commit(next).is_err() {
+                    return (PollStatus::StorageError, None);
+                }
+            }
+        }
         (
             match result {
-                Ok(revision) => PollStatus::Accepted { revision },
+                Ok(state) => PollStatus::Accepted {
+                    revision: state.revision,
+                },
                 Err(reason) => PollStatus::Rejected { reason },
             },
             None,

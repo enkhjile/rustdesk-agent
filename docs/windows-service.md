@@ -1,8 +1,8 @@
 # Windows service and local CLI commands
 
 This development slice targets Windows x64. It is not ready for kiosk deployment.
-It implements SCM start/stop/shutdown, read-only HTTPS polling when enrolled, and
-local diagnostic snapshots. The service does not apply settings; an explicit local
+It implements SCM start/stop/shutdown, read-only HTTPS polling by default, and
+local diagnostic snapshots. Default builds do not apply settings; an explicit local
 one-shot setter is described below. [Durable state and status delivery](state.md) require administrator initialization before starting an enrolled service. Local [enrollment and credential
 storage](enrollment.md) passed the isolated VM access and lifecycle checks.
 No service is installed automatically and no elevation is requested by the agent.
@@ -41,6 +41,37 @@ applied revision remains null. RustDesk can fall back to cached
 configuration during IPC failures; even its getter commands can update local
 caches internally. The detector issues no modifying CLI commands. The agent never
 edits RustDesk TOML or provisions permanent passwords.
+
+## Experimental managed application
+
+For isolated lab validation only, build with `cargo build --locked --features lab-apply`
+and append `--lab-apply` to the existing `--service <RustDesk.exe> <report.json>`
+arguments. Both gates are required; default builds reject the flag. Enrollment,
+TLS validation, service-SID access and durable state requirements remain in force.
+Application accepts only loopback IP origins or `localhost`, pinned to `127.0.0.1`.
+Other management origins are rejected before management requests or application.
+
+Each fresh, valid desired response is revision-checked and durably saved before
+settings I/O. The adapter checks official version 1.4.7, reads each requested
+setting and skips a write when CLI output already matches. Different or ambiguous
+values invoke this executable's existing `--set-option` worker, with its global
+lock, allowlist and job containment. Failed reads do not trigger writes. Omitted
+keys stay unmanaged. Equal revisions repeat observation and can repair CLI-visible
+drift; a failed setting does not erase another setting's outcome.
+
+Results are `unverified_cli_match`, `read_failed`, `write_failed`, `mismatch` or
+`unsupported`. `indeterminate` is persisted before I/O and remains possible after
+interruption. Per-setting outcomes are saved before proceeding to the next key.
+`applied_revision` is always null: CLI output may be cached, including on offline
+RustDesk. No result is promoted to `verified`. A later valid poll may retry failed
+application; delivery retries alone never reapply cached desired state.
+The local diagnostic detection snapshot precedes application in that cycle.
+
+The service and worker use nested process-lifetime jobs so stopping or killing
+the service cleans up its workers and their descendants. A canceled command may
+already have changed settings. There is no transactional application or rollback,
+and other writers do not participate in the agent lock. Production application
+remains disabled; this experiment does not satisfy the live-verification gate.
 
 ## Explicit local setting command
 
@@ -93,7 +124,8 @@ so normal exit or forced termination also cleans up its child process tree.
 Membership is established before spawning, avoiding a spawn-then-assign gap.
 Containment setup errors fail before launching RustDesk, including incompatible
 parent-job restrictions. Existing RustDesk service/GUI processes are not added
-to this job. This applies only to `--set-option`, not detection or service polling.
+to this job. Default builds install this containment only for `--set-option`;
+the experimental lab service also contains its workers.
 See [Windows Job Objects](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects).
 
 In the pre-serialization

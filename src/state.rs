@@ -1,5 +1,5 @@
 //! One bounded snapshot: revision watermark, report sequence and latest outbox item.
-use crate::{DesiredState, RevisionGuard, enrollment::EnrollmentInfo};
+use crate::{DesiredState, RevisionGuard, Setting, enrollment::EnrollmentInfo};
 use serde::{Deserialize, Serialize};
 use std::io;
 use url::Url;
@@ -41,14 +41,30 @@ pub struct StatusReport {
 #[serde(deny_unknown_fields)]
 struct Results {
     #[serde(skip_serializing_if = "Option::is_none")]
-    approve_mode: Option<Unsupported>,
+    approve_mode: Option<SettingResult>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    verification_method: Option<Unsupported>,
+    verification_method: Option<SettingResult>,
 }
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-enum Unsupported {
+pub enum SettingResult {
     Unsupported,
+    /// Matching CLI output is not independent live verification.
+    UnverifiedCliMatch,
+    ReadFailed,
+    WriteFailed,
+    Mismatch,
+    /// Persisted before I/O; interruption can leave the actual outcome unknown.
+    Indeterminate,
+}
+
+impl StatusReport {
+    pub(crate) fn set_result(&mut self, key: Setting, result: SettingResult) {
+        match key {
+            Setting::ApproveMode => self.results.approve_mode = Some(result),
+            Setting::VerificationMethod => self.results.verification_method = Some(result),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -95,13 +111,20 @@ impl DurableState {
         }
         if let Some(report) = &state.pending {
             let accepted = state.accepted.as_ref().ok_or("invalid_state_store")?;
-            if report
-                != &state.report(
-                    accepted,
-                    report.rustdesk_id.clone(),
-                    report.rustdesk_version.clone(),
-                )
-            {
+            let mut expected = state.report(
+                accepted,
+                report.rustdesk_id.clone(),
+                report.rustdesk_version.clone(),
+            );
+            for (key, _) in accepted.pairs() {
+                let result = match key {
+                    Setting::ApproveMode => report.results.approve_mode,
+                    Setting::VerificationMethod => report.results.verification_method,
+                }
+                .ok_or("invalid_pending_report")?;
+                expected.set_result(key, result);
+            }
+            if report != &expected {
                 return Err("invalid_pending_report");
             }
             validate_identity(
@@ -157,11 +180,11 @@ impl DurableState {
                 approve_mode: desired
                     .settings
                     .approve_mode
-                    .map(|_| Unsupported::Unsupported),
+                    .map(|_| SettingResult::Unsupported),
                 verification_method: desired
                     .settings
                     .verification_method
-                    .map(|_| Unsupported::Unsupported),
+                    .map(|_| SettingResult::Unsupported),
             },
         }
     }

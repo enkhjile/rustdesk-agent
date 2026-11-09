@@ -1,6 +1,6 @@
-//! Explicit one-shot settings commands. Never used by the polling service.
+//! One-shot settings commands, also used by the opt-in lab service's CLI worker.
 use crate::detection::{Observation, Query, parse_observation};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{future::Future, path::Path};
 
 #[derive(Clone, Copy, Debug)]
@@ -29,7 +29,8 @@ impl Change {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SetReport {
     pub command_accepted: bool,
     pub readback: Observation,

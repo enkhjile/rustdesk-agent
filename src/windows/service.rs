@@ -16,7 +16,7 @@ use windows_service::{
 };
 
 const NAME: &str = "RustDeskAgent";
-static CONFIG: OnceLock<(PathBuf, PathBuf)> = OnceLock::new();
+static CONFIG: OnceLock<(PathBuf, PathBuf, bool)> = OnceLock::new();
 define_windows_service!(ffi_service_main, service_main);
 
 fn is_report_path(path: &Path) -> bool {
@@ -26,7 +26,14 @@ fn is_report_path(path: &Path) -> bool {
             .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
 }
 
-pub fn dispatch(executable: PathBuf, report: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+pub fn dispatch(
+    executable: PathBuf,
+    report: PathBuf,
+    lab_apply: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if lab_apply && !cfg!(feature = "lab-apply") {
+        return Err("Lab application is not compiled into this build".into());
+    }
     if !executable.is_absolute() || !is_report_path(&report) || report == executable {
         return Err(
             "Use an absolute executable path and a distinct absolute .json report path".into(),
@@ -36,7 +43,7 @@ pub fn dispatch(executable: PathBuf, report: PathBuf) -> Result<(), Box<dyn std:
         return Err("Report directory must already exist and be administrator-protected".into());
     }
     CONFIG
-        .set((executable, report))
+        .set((executable, report, lab_apply))
         .map_err(|_| "service already configured")?;
     service_dispatcher::start(NAME, ffi_service_main)?;
     Ok(())
@@ -112,7 +119,14 @@ fn run(
         Err(error) => return Err(error.into()),
     };
     publish(handle, ServiceState::Running, false)?;
-    let (executable, report_path) = CONFIG.get().ok_or("missing service configuration")?;
+    let (executable, report_path, lab_apply) =
+        CONFIG.get().ok_or("missing service configuration")?;
+    // Also contain worker processes if the service itself is forcibly killed.
+    if *lab_apply {
+        crate::process_job::install()?;
+    }
+    #[cfg(feature = "lab-apply")]
+    let agent = std::env::current_exe()?;
     let enrollment_info = enrollment.as_ref().map(|value| value.info());
     runtime.block_on(async {
         let mut poller = enrollment
@@ -132,7 +146,14 @@ fn run(
                 Some(poller) => tokio::select! {
                     biased;
                     _ = stop.changed() => break,
-                    observation = poller.poll(observed(&detection.rustdesk_id), observed(&detection.version)) => Some(observation),
+                    observation = async {
+                        #[cfg(feature = "lab-apply")]
+                        if *lab_apply {
+                            return poller.poll_applying(observed(&detection.rustdesk_id), observed(&detection.version),
+                                |key, wanted| rustdesk_agent::managed::apply(&agent, executable, key, wanted)).await;
+                        }
+                        poller.poll(observed(&detection.rustdesk_id), observed(&detection.version)).await
+                    } => Some(observation),
                 },
                 None => None,
             };
