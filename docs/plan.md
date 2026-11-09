@@ -14,7 +14,7 @@ in PR #12; dated results belong in the [validation archive](validation/README.md
 | Windows service and enrollment | SCM lifecycle, machine-DPAPI enrollment and service-SID ACLs. VM tests passed service access, ordinary-user/unrelated-service denial, administrator initialization and unattended reboot. |
 | Durable polling | Authenticated HTTPS, bounded retries, revision watermark, observation sequence and pending report. Real-service tests passed GET/POST cancellation, retry identity and restart/reboot retention. Default reports remain `unsupported`; lab application reports per-setting unverified outcomes, always with null applied revision. |
 | Read-only detector | Bounded official CLI queries; settings are `unverified_cli_value` or `ambiguous_default`, never verified live. A real stalled getter child was terminated on service stop. |
-| Explicit local setter | `--set-option` accepts only approve-mode and verification-method values for 1.4.7. Tested as administrator and LocalService, with cross-account readback and restart/reboot persistence. It is not invoked by polling. |
+| Explicit local setter | `--set-option` accepts only approve-mode and verification-method values for 1.4.7. Tested as administrator and LocalService, with cross-account readback and restart/reboot persistence. Only opt-in lab polling invokes it automatically. |
 
 The [service record](validation/2026-11-08-service-lifecycle.md) contains the isolation
 and lifecycle evidence. The [getter diagnosis](validation/2026-11-08-getter-diagnosis-and-gui.md)
@@ -59,7 +59,10 @@ that limitation is not evidence that setters need a custom client.
    feature and service flag connect polling to the existing setter only for a
    loopback HTTPS lab. Durable per-setting results remain unverified and applied
    revision remains null. Its [service test](validation/2026-11-09-managed-application.md)
-   passed drift, partial-result, retry and cancellation checks. Establish what evidence is sufficient
+   passed drift, partial-result, retry and cancellation checks. The subsequent
+   [crash/reboot test](validation/2026-11-09-managed-crash-recovery.md) passed actual
+   setter cleanup, durable uncertainty, report retry and fresh-state recovery.
+   Establish what evidence is sufficient
    for a per-setting `verified` result before enabling production application.
    Exercise revision changes, drift, partial outcomes and status against actual
    connection behavior in an isolated management canary. Production service writes

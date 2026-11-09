@@ -25,6 +25,9 @@ The [setter child-cleanup test](2026-11-09-setter-child-cleanup.md) reproduced a
 child surviving agent termination and verified the process-containment fix.
 The [managed application test](2026-11-09-managed-application.md) exercised the
 default-off loopback service path, drift, partial results, retries and cancellation.
+The [managed crash/reboot test](2026-11-09-managed-crash-recovery.md) then verified
+actual setter cleanup after forced service death, retained uncertainty, identical
+report retries through reboot and resumption only after fresh desired state.
 
 All runtime work used disposable isolated Windows VMs and dummy credentials.
 These records do not authorize production deployment or automatic service writes.

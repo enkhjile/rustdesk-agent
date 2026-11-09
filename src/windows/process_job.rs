@@ -1,4 +1,4 @@
-//! Process-lifetime containment for the one-shot settings CLI, not the service.
+//! Process-lifetime containment for the settings CLI and opt-in lab service.
 use std::{
     io,
     os::windows::io::{AsRawHandle, FromRawHandle, IntoRawHandle, OwnedHandle},
@@ -96,6 +96,10 @@ mod tests {
                 let _ = leaf.try_wait();
             }
             "leaf" => {
+                if root.join("nested-job").exists() {
+                    // The managed service's worker installs its own job too.
+                    install().unwrap();
+                }
                 let mut grandchild = child_command(root, "grandchild").spawn().unwrap();
                 fs::write(root.join("leaf"), std::process::id().to_string()).unwrap();
                 thread::sleep(Duration::from_secs(20));
@@ -111,9 +115,12 @@ mod tests {
 
     #[test]
     fn descendants_exit_on_normal_and_forced_parent_exit() {
-        for force in [false, true] {
+        for (force, nested) in [(false, false), (true, false), (false, true), (true, true)] {
             let root = std::env::temp_dir().join(format!("rustdesk-job-{}", uuid::Uuid::new_v4()));
             fs::create_dir(&root).unwrap();
+            if nested {
+                fs::write(root.join("nested-job"), "").unwrap();
+            }
             let mut owner = child_command(&root, "owner").spawn().unwrap();
             let deadline = Instant::now() + Duration::from_secs(10);
             let ready = |name| fs::metadata(root.join(name)).is_ok_and(|entry| entry.len() > 0);
@@ -161,7 +168,7 @@ mod tests {
             }
             assert!(
                 all_exited,
-                "descendants survived parent exit (forced={force})"
+                "descendants survived parent exit (forced={force}, nested={nested})"
             );
         }
     }
