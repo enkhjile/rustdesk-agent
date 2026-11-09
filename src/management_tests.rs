@@ -380,6 +380,60 @@ struct FailSave {
 }
 
 #[tokio::test]
+async fn managed_revision_changes_use_current_values_and_leave_omitted_settings_unmanaged() {
+    use crate::{Setting, state::SettingResult};
+    let fixture = support::Fixture::start().await;
+    let mut poller = poller(&fixture);
+    let mut actual = json!({});
+    let revisions = [
+        json!({"approve_mode":"click", "verification_method":"use-temporary-password"}),
+        json!({"approve_mode":"password", "verification_method":"use-temporary-password"}),
+        json!({"approve_mode":"password", "verification_method":"use-permanent-password"}),
+        json!({"approve_mode":"click"}),
+    ];
+    for (index, settings) in revisions.into_iter().enumerate() {
+        let revision = 7 + index as u64;
+        fixture
+            .assign(
+                support::A,
+                json!({"schema_version":1,"revision":revision,"settings":settings}),
+            )
+            .unwrap();
+        let mut requested = json!({});
+        let observation = poller
+            .poll_applying(None, None, |key, value| {
+                let name = match key {
+                    Setting::ApproveMode => "approve_mode",
+                    Setting::VerificationMethod => "verification_method",
+                };
+                requested[name] = json!(value);
+                actual[name] = json!(value);
+                std::future::ready(SettingResult::UnverifiedCliMatch)
+            })
+            .await;
+        assert_eq!(observation.status, PollStatus::Accepted { revision });
+        assert_eq!(observation.delivery, Some(PollStatus::Delivered));
+        assert_eq!(requested, settings);
+        let report: serde_json::Value =
+            serde_json::from_slice(fixture.attempts().last().unwrap()).unwrap();
+        assert_eq!(report["desired_revision"], revision);
+        assert_eq!(report["observation_sequence"], index + 1);
+        assert!(report["applied_revision"].is_null());
+        let expected: serde_json::Map<String, serde_json::Value> = settings
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(|key| (key.clone(), json!("unverified_cli_match")))
+            .collect();
+        assert_eq!(report["results"], json!(expected));
+    }
+    assert_eq!(
+        actual,
+        json!({"approve_mode":"click", "verification_method":"use-permanent-password"})
+    );
+}
+
+#[tokio::test]
 async fn managed_rejects_unsafe_inputs_and_reobserves_equal_and_higher_revisions() {
     use crate::state::SettingResult;
     let fixture = support::Fixture::start().await;

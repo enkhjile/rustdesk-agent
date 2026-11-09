@@ -62,6 +62,10 @@ that limitation is not evidence that setters need a custom client.
    passed drift, partial-result, retry and cancellation checks. The subsequent
    [crash/reboot test](validation/2026-11-09-managed-crash-recovery.md) passed actual
    setter cleanup, durable uncertainty, report retry and fresh-state recovery.
+   The [managed connection test](validation/2026-11-09-managed-connections.md)
+   independently confirmed click approval, temporary-password access and rejection
+   of that password after a higher revision selected permanent-only mode.
+   These user-assisted observations do not implement an automatic live verifier.
    Establish what evidence is sufficient
    for a per-setting `verified` result before enabling production application.
    Exercise revision changes, drift, partial outcomes and status against actual

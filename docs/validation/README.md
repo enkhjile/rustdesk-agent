@@ -28,6 +28,9 @@ default-off loopback service path, drift, partial results, retries and cancellat
 The [managed crash/reboot test](2026-11-09-managed-crash-recovery.md) then verified
 actual setter cleanup after forced service death, retained uncertainty, identical
 report retries through reboot and resumption only after fresh desired state.
+The [managed connection test](2026-11-09-managed-connections.md) verified click
+approval, temporary-password access and rejection after a higher revision selected
+permanent-only mode, while service reports remained explicitly unverified.
 
 All runtime work used disposable isolated Windows VMs and dummy credentials.
 These records do not authorize production deployment or automatic service writes.
