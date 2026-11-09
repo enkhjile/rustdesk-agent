@@ -39,8 +39,11 @@ that limitation is not evidence that setters need a custom client.
    and temporary-password authentication with `password`, both using
    `use-temporary-password`. A repeat test rejected the previously working
    temporary password after switching to permanent-only verification.
-   Other connection combinations, disabled settings, all RustDesk processes
-   unavailable, abrupt agent termination and whole-map/concurrent changes remain
+   With background RustDesk processes absent, both accounts' setters still
+   returned matching unverified readback; post-start results differed by account.
+   See the [unavailable-process test](validation/2026-11-09-unavailable-processes.md).
+   Other connection combinations, disabled settings, abrupt agent termination
+   and whole-map/concurrent changes remain
    untested. Keep command acceptance, CLI readback, GUI state and connection
    behavior distinct.
 2. **Define verified automatic application.** Establish what evidence is sufficient

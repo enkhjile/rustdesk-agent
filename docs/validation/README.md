@@ -14,5 +14,8 @@ A record's remaining-gates section describes that run, not the current project b
 | [Official setter — November 9](2026-11-09-official-cli-setters.md) | Actual agent setters as administrator/LocalService, persistence, restoration and hosted CI. Independent live connection verification remains outstanding. |
 | [Setter modes, deadline and connections — November 9](2026-11-09-setter-modes-and-timeout.md) | Remaining values under both accounts, locked GUI comparison, real setter timeout, and successful click-approved and temporary-password connections on a private two-VM network. |
 
+The [unavailable-process test](2026-11-09-unavailable-processes.md) subsequently
+confirmed account-dependent offline setter/readback behavior and restoration.
+
 All runtime work used disposable isolated Windows VMs and dummy credentials.
 These records do not authorize production deployment or automatic service writes.

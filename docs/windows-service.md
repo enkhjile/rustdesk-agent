@@ -71,6 +71,13 @@ A readback mismatch prints the report and exits nonzero. This command is not
 connected to polling or reconciliation; management still reports `unsupported`
 with null applied revision. See [isolated setter validation](validation/2026-11-09-official-cli-setters.md).
 
+The [unavailable-process test](validation/2026-11-09-unavailable-processes.md)
+confirmed that setters can return matching readback while the RustDesk service
+is disabled and background processes are absent. Offline results differed by
+account; LocalService changes appeared in both accounts' getters after restart.
+Do not treat success as proof of live application or assume an offline command
+has no effect on a later service start.
+
 A separate direct IPC reader is not a supported workaround for 1.4.7: the
 [Windows main IPC authorization](https://github.com/rustdesk/rustdesk/blob/1.4.7/src/ipc/auth.rs#L660)
 requires the peer executable to match RustDesk, while the
