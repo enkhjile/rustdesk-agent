@@ -6,6 +6,28 @@ fn credential() -> Zeroizing<String> {
 }
 
 #[test]
+fn replacement_preserves_identity_and_validates_the_new_secret() {
+    let original = Enrollment::new("https://management.example:8443", credential()).unwrap();
+    let encoded = original.encode().unwrap();
+    let info = original.info();
+    let replacement = "replacement-device-credential-0123456789abcdef";
+    let changed = original
+        .with_credential(Zeroizing::new(replacement.into()))
+        .unwrap();
+    assert_eq!(changed.info(), info);
+    assert!(!format!("{changed:?}").contains(replacement));
+    let json: serde_json::Value = serde_json::from_slice(&changed.encode().unwrap()).unwrap();
+    assert_eq!(json["credential"], replacement);
+    assert!(
+        Enrollment::decode(&encoded)
+            .unwrap()
+            .with_credential(Zeroizing::new("short".into()))
+            .is_err()
+    );
+    assert_eq!(Enrollment::decode(&encoded).unwrap().info(), info);
+}
+
+#[test]
 fn enrollment_retains_identity_and_redacts_debug() {
     let enrollment = Enrollment::new("https://management.example:8443", credential()).unwrap();
     let encoded = enrollment.encode().unwrap();

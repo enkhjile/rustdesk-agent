@@ -1,8 +1,8 @@
 # Local enrollment and credential storage
 
 This is a development implementation, not a deployment approval. It provisions
-one device locally; it does not register it with a server, rotate credentials,
-or change the service account. Once restarted, the service uses valid enrollment
+one device locally and supports administrator credential replacement; it does not
+register it with a server or change the service account. Once restarted, the service uses valid enrollment
 for read-only management polling; see [service behavior](windows-service.md).
 
 ## Storage design
@@ -72,13 +72,47 @@ Missing enrollment leaves the current service in read-only diagnostic mode, with
 stops service startup with code 1. Authenticated polling requires a
 valid enrollment and must not treat a missing store as permission to regenerate it.
 
-## Verification
+## Credential rotation and recovery
+
+Rotation preserves the existing UUID, HTTPS origin, revision watermark,
+observation sequence and pending report. It requires intact enrollment and
+initialized state; missing or corrupt stores are rejected, never reset.
+
+1. Stop `RustDeskAgent` using an elevated administrator session.
+2. Issue a replacement through the management backend's administrator API.
+   In the Console integration, `POST /api/admin/agent/:id/rotate` returns the new
+   device credential once, immediately invalidates the previous token and clears
+   revocation. It preserves the device binding and report history.
+3. Run `rustdesk-agent.exe --replace-credential`, supplying the replacement
+   through redirected stdin from the secret provider, as for `--enroll`.
+   Only UUID and origin are printed. The command requires elevation and the
+   exclusive state writer lock; a running enrolled service blocks replacement.
+4. Start `RustDeskAgent` and check Console for resumed polling/report delivery.
+
+Do not run `--enroll` or `--init-state` again for rotation. A lost Console response
+can be recovered by issuing another replacement; all earlier tokens remain
+invalid. If interrupted before local replacement, the agent retains its old
+encrypted credential and receives authentication failures until replacement is
+completed. Local success alone does not prove backend authorization.
+
+The new credential is machine-DPAPI encrypted into a protected staging file,
+flushed, then atomically replaces `enrollment.dpapi`. An interrupted protected
+stage is discarded on retry; an unexpected access policy is rejected. The
+operation does not rewrite durable state or change RustDesk settings.
+
+## Verification results
 
 Portable tests cover origin/token validation, stable serialized identity,
 redacted output, UUID version/variant, duplicate fields and malformed records. Windows-only tests cover DPAPI round-trip,
 tamper rejection, protected file creation, repeated-enrollment refusal, identity
 retention and rejection of a mismatched access policy. The storage test requires
 an elevated test runner and uses only random temporary paths and dummy credentials.
+
+Replacement tests cover invalid credentials and unchanged identity, protected
+staging recovery, failed replacement preserving the old blob, and rejection of
+changed identity or access policy. Real-service rotation against Console,
+ordinary-user replacement denial and interrupted handoff recovery remain pending
+isolated-VM validation; prior enrollment results below do not establish them.
 
 Windows x64 builds require the MSVC C++ tools and SDK (including the TLS dependency).
 PR #3 passed hosted Windows tests, including DPAPI round-trip and protected-store

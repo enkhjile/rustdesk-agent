@@ -10,13 +10,16 @@ No custom client, direct TOML editing or password provisioning.
 
 [Enrollment](docs/enrollment.md) uses machine-scoped DPAPI and service-SID ACLs.
 Enrolled services require administrator [state initialization](docs/state.md).
+Administrator credential replacement preserves identity and reporting state;
+see the [rotation procedure](docs/enrollment.md#credential-rotation-and-recovery).
 Isolated VM tests passed service access isolation, ordinary-user denial, HTTP
 retries/cancellation and unattended reboot. Explicit setters passed under
 administrator and LocalService accounts, including restart/reboot persistence.
 See the [dated validation records](docs/validation/README.md) for exact scope.
 
-Production backend/server registration, automatic settings application and
-deployment packaging remain unfinished. Start with [Windows usage](docs/windows-service.md),
+The [Console fork](https://github.com/enkhjile/rustdesk-console) provides server
+registration and read-only integration. Production deployment, automatic settings
+application and deployment packaging remain unfinished. Start with [Windows usage](docs/windows-service.md),
 the [current plan](docs/plan.md), and the [contract fixture](docs/contract-testing.md).
 
 ## Repository layout
@@ -35,7 +38,7 @@ src/enrollment.rs   Validated device identity, origin and credential record
 tests/reconcile.rs  Tests using an in-memory settings adapter
 docs/plan.md        Current capabilities and remaining validation gates
 docs/validation/   Dated test evidence, not current operating instructions
-docs/contract.md    Management endpoint contract (test backend only)
+docs/contract.md    Management endpoint contract and integration limits
 tests/contract_backend.rs  HTTPS contract tests
 tests/support/     In-memory Rust test backend
 .github/workflows/ci.yml  Windows checks, dependency audit, automatic releases
