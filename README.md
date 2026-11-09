@@ -1,7 +1,9 @@
 # RustDesk Windows agent — development slices
 
 Windows x64 companion agent in development. The service polls desired state over
-HTTPS and delivers durable status reports, but does not apply settings automatically.
+HTTPS and delivers durable status reports; default builds cannot apply settings automatically.
+An experimental [lab application mode](docs/windows-service.md#experimental-managed-application)
+requires a build feature, local startup flag and loopback HTTPS endpoint.
 An explicit local `--set-option` command supports two allowlisted settings using
 official RustDesk 1.4.7. Matching CLI readback is separate from live verification.
 No custom client, direct TOML editing or password provisioning.
@@ -53,8 +55,9 @@ tools and Windows SDK. From this directory:
 
 ```sh
 cargo fmt --check
-cargo clippy --locked --all-targets -- -D warnings
+cargo clippy --locked --all-targets --all-features -- -D warnings
 cargo test --locked
+cargo test --locked --features lab-apply
 cargo build --locked
 ```
 

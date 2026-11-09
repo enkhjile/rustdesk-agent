@@ -12,7 +12,7 @@ in PR #12; dated results belong in the [validation archive](validation/README.md
 | Desired-state core | Strict allowlist, revision guards and per-setting reconciliation tested with an in-memory adapter; not connected to service writes. |
 | Contract fixture | In-process Rust loopback HTTPS backend with schema, authentication, revision and report-ordering tests. No production server. |
 | Windows service and enrollment | SCM lifecycle, machine-DPAPI enrollment and service-SID ACLs. VM tests passed service access, ordinary-user/unrelated-service denial, administrator initialization and unattended reboot. |
-| Durable polling | Authenticated HTTPS, bounded retries, revision watermark, observation sequence and pending report. Real-service tests passed GET/POST cancellation, retry identity and restart/reboot retention. Reports remain `unsupported` with null applied revision. |
+| Durable polling | Authenticated HTTPS, bounded retries, revision watermark, observation sequence and pending report. Real-service tests passed GET/POST cancellation, retry identity and restart/reboot retention. Default reports remain `unsupported`; lab application reports per-setting unverified outcomes, always with null applied revision. |
 | Read-only detector | Bounded official CLI queries; settings are `unverified_cli_value` or `ambiguous_default`, never verified live. A real stalled getter child was terminated on service stop. |
 | Explicit local setter | `--set-option` accepts only approve-mode and verification-method values for 1.4.7. Tested as administrator and LocalService, with cross-account readback and restart/reboot persistence. It is not invoked by polling. |
 
@@ -55,10 +55,14 @@ that limitation is not evidence that setters need a custom client.
    to clean up its process tree on exit. The actual setter retest passed.
    Keep command acceptance, CLI readback, GUI state and connection
    behavior distinct.
-2. **Define verified automatic application.** Establish what evidence is sufficient
-   for a per-setting `verified` result before connecting the adapter to polling.
+2. **Define verified automatic application.** The default-off `lab-apply` build
+   feature and service flag connect polling to the existing setter only for a
+   loopback HTTPS lab. Durable per-setting results remain unverified and applied
+   revision remains null. Its [service test](validation/2026-11-09-managed-application.md)
+   passed drift, partial-result, retry and cancellation checks. Establish what evidence is sufficient
+   for a per-setting `verified` result before enabling production application.
    Exercise revision changes, drift, partial outcomes and status against actual
-   connection behavior in an isolated management canary. Automatic service writes
+   connection behavior in an isolated management canary. Production service writes
    stay disabled until this is implemented and validated.
 3. **Complete deployment work.** Implement a production backend or Console
    extension, server registration, credential rotation/revocation and audit.

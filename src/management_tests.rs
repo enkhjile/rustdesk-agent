@@ -271,6 +271,57 @@ fn restored_poller(
 }
 
 #[tokio::test]
+async fn managed_poll_reports_unverified_partial_results_and_retries_without_reapplying() {
+    use crate::{Setting, state::SettingResult};
+    let fixture = support::Fixture::start().await;
+    fixture
+        .assign(
+            support::A,
+            json!({"schema_version":1,"revision":7,"settings":{
+                "approve_mode":"click", "verification_method":"use-temporary-password"
+            }}),
+        )
+        .unwrap();
+    let store = crate::state::tests::MemoryStore::new(&enrollment(&fixture.url).info());
+    let mut poller = restored_poller(&fixture, store.clone());
+    fixture.status_response(Some(StatusCode::SERVICE_UNAVAILABLE));
+    let mut calls = vec![];
+    let result = poller
+        .poll_applying(None, None, |key, _| {
+            let saved =
+                DurableState::decode(&store.0.lock().unwrap(), &enrollment(&fixture.url).info())
+                    .unwrap();
+            assert_eq!(saved.accepted.unwrap().revision, 7);
+            calls.push(key);
+            std::future::ready(if key == Setting::ApproveMode {
+                SettingResult::UnverifiedCliMatch
+            } else {
+                SettingResult::WriteFailed
+            })
+        })
+        .await;
+    assert_eq!(result.delivery, Some(PollStatus::HttpError { status: 503 }));
+    assert_eq!(calls.len(), 2);
+    let first = fixture.attempts()[0].clone();
+    let report: serde_json::Value = serde_json::from_slice(&first).unwrap();
+    assert_eq!(report["results"]["approve_mode"], "unverified_cli_match");
+    assert_eq!(report["results"]["verification_method"], "write_failed");
+    assert!(report["applied_revision"].is_null());
+    drop(poller);
+    let mut poller = restored_poller(&fixture, store);
+    fixture.status_response(None);
+    respond(&fixture, 204, "");
+    poller
+        .poll_applying(None, None, |_, _| {
+            panic!("report delivery must not apply cached desired state");
+            #[allow(unreachable_code)]
+            std::future::ready(SettingResult::WriteFailed)
+        })
+        .await;
+    assert_eq!(fixture.attempts()[1], first);
+}
+
+#[tokio::test]
 async fn report_retry_survives_restart_and_new_observation_supersedes_it() {
     use crate::state::tests::MemoryStore;
     let fixture = support::Fixture::start().await;
@@ -326,6 +377,114 @@ async fn report_retry_survives_restart_and_new_observation_supersedes_it() {
 struct FailSave {
     store: crate::state::tests::MemoryStore,
     remaining: usize,
+}
+
+#[tokio::test]
+async fn managed_rejects_unsafe_inputs_and_reobserves_equal_and_higher_revisions() {
+    use crate::state::SettingResult;
+    let fixture = support::Fixture::start().await;
+    let mut poller = poller(&fixture);
+    let mut calls = 0;
+    for revision in [7, 7, 8] {
+        respond(&fixture, 200, &desired(revision, "click"));
+        assert_eq!(
+            poller
+                .poll_applying(None, None, |_, _| {
+                    calls += 1;
+                    std::future::ready(SettingResult::UnverifiedCliMatch)
+                })
+                .await
+                .status,
+            PollStatus::Accepted { revision }
+        );
+    }
+    assert_eq!(calls, 3); // Equal revisions still inspect drift; higher revisions progress.
+    for (code, body) in [
+        (204, "".into()),
+        (401, "".into()),
+        (403, "".into()),
+        (503, "".into()),
+        (200, "not json".into()),
+        (200, desired(7, "click")),
+        (200, desired(8, "password")),
+    ] {
+        respond(&fixture, code, &body);
+        poller
+            .poll_applying(None, None, |_, _| {
+                calls += 1;
+                std::future::ready(SettingResult::WriteFailed)
+            })
+            .await;
+    }
+    assert_eq!(calls, 3);
+    poller.enrollment = enrollment("https://example.test");
+    assert_eq!(
+        poller
+            .poll_applying(None, None, |_, _| {
+                calls += 1;
+                std::future::ready(SettingResult::WriteFailed)
+            })
+            .await
+            .status,
+        PollStatus::Rejected {
+            reason: "lab_requires_loopback_origin"
+        }
+    );
+    assert_eq!(calls, 3);
+}
+
+#[tokio::test]
+async fn managed_storage_failure_stops_writes_and_cancellation_retains_uncertainty() {
+    use crate::state::SettingResult;
+    let fixture = support::Fixture::start().await;
+    respond(
+        &fixture,
+        200,
+        &json!({"schema_version":1,"revision":7,"settings":{
+            "approve_mode":"click", "verification_method":"use-temporary-password"
+        }})
+        .to_string(),
+    );
+    for (remaining, expected_calls) in [(0, 0), (1, 1)] {
+        let store = crate::state::tests::MemoryStore::new(&enrollment(&fixture.url).info());
+        let mut poller = restored_poller(&fixture, FailSave { store, remaining });
+        let mut calls = 0;
+        for _ in 0..2 {
+            assert_eq!(
+                poller
+                    .poll_applying(None, None, |_, _| {
+                        calls += 1;
+                        std::future::ready(SettingResult::UnverifiedCliMatch)
+                    })
+                    .await
+                    .status,
+                PollStatus::StorageError
+            );
+        }
+        assert_eq!(calls, expected_calls);
+    }
+    let store = crate::state::tests::MemoryStore::new(&enrollment(&fixture.url).info());
+    let mut poller = restored_poller(&fixture, store.clone());
+    let mut started = false;
+    assert!(
+        tokio::time::timeout(
+            Duration::from_millis(100),
+            poller.poll_applying(None, None, |_, _| {
+                started = true;
+                std::future::pending::<SettingResult>()
+            })
+        )
+        .await
+        .is_err()
+    );
+    assert!(started);
+    drop(poller);
+    let restored = restored_poller(&fixture, store);
+    let pending = serde_json::to_value(restored.state.pending.unwrap()).unwrap();
+    assert_eq!(pending["results"]["approve_mode"], "indeterminate");
+    assert_eq!(pending["results"]["verification_method"], "indeterminate");
+    assert!(pending["applied_revision"].is_null());
+    assert!(fixture.attempts().is_empty());
 }
 impl crate::state::StateStore for FailSave {
     fn load(&mut self) -> std::io::Result<Vec<u8>> {

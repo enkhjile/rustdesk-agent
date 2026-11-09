@@ -1,5 +1,5 @@
 //! Read-only CLI observations, never evidence that settings are live or applied.
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug)]
 pub enum Query {
@@ -19,7 +19,7 @@ impl Query {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "status", content = "value", rename_all = "snake_case")]
 pub enum Observation {
     Observed(String),

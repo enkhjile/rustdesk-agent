@@ -23,6 +23,8 @@ The [serialized-setter rerun](2026-11-09-serialized-setters.md) retained both
 changes in 20/20 rounds with the new CLI lock and verified bounded busy handling.
 The [setter child-cleanup test](2026-11-09-setter-child-cleanup.md) reproduced a
 child surviving agent termination and verified the process-containment fix.
+The [managed application test](2026-11-09-managed-application.md) exercised the
+default-off loopback service path, drift, partial results, retries and cancellation.
 
 All runtime work used disposable isolated Windows VMs and dummy credentials.
 These records do not authorize production deployment or automatic service writes.
