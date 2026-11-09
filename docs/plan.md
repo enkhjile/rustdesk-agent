@@ -44,8 +44,10 @@ that limitation is not evidence that setters need a custom client.
    See the [unavailable-process test](validation/2026-11-09-unavailable-processes.md).
    [Concurrent tests](validation/2026-11-09-concurrent-settings.md) preserved the
    other allowed setting sequentially but lost one update in 4/20 overlapping
-   rounds; the affected commands reported mismatches. Future writers must be
-   serialized and still handle external interference. Other connection
+   rounds; the affected commands reported mismatches. Explicit CLI commands now
+   share a bounded machine-wide lock; the [repeat test](validation/2026-11-09-serialized-setters.md)
+   retained both changes in all 20 rounds. External interference and CLI-cache
+   ambiguity still require handling. Other connection
    combinations, disabled settings, abrupt agent termination and preservation
    of arbitrary unrelated options remain untested.
    Keep command acceptance, CLI readback, GUI state and connection

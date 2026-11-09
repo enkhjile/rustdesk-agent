@@ -19,6 +19,8 @@ confirmed account-dependent offline setter/readback behavior and restoration.
 The [concurrent-change test](2026-11-09-concurrent-settings.md) preserved the other
 allowed key sequentially but observed detected lost updates in 4/20 overlapping
 rounds, followed by restoration.
+The [serialized-setter rerun](2026-11-09-serialized-setters.md) retained both
+changes in 20/20 rounds with the new CLI lock and verified bounded busy handling.
 
 All runtime work used disposable isolated Windows VMs and dummy credentials.
 These records do not authorize production deployment or automatic service writes.
