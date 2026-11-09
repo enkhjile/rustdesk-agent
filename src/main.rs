@@ -7,6 +7,10 @@ mod service;
 mod setter_lock;
 
 #[cfg(all(windows, target_arch = "x86_64"))]
+#[path = "windows/process_job.rs"]
+mod process_job;
+
+#[cfg(all(windows, target_arch = "x86_64"))]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use std::path::PathBuf;
     let args: Vec<_> = std::env::args_os().skip(1).collect();
@@ -53,6 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?;
         // Keep ownership on this thread through version check, write and readback.
         let _settings_lock = setter_lock::SettingsLock::acquire()?;
+        process_job::install()?;
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?;

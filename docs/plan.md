@@ -48,8 +48,11 @@ that limitation is not evidence that setters need a custom client.
    share a bounded machine-wide lock; the [repeat test](validation/2026-11-09-serialized-setters.md)
    retained both changes in all 20 rounds. External interference and CLI-cache
    ambiguity still require handling. Other connection
-   combinations, disabled settings, abrupt agent termination and preservation
+   combinations, disabled settings and preservation
    of arbitrary unrelated options remain untested.
+   A [forced-termination test](validation/2026-11-09-setter-child-cleanup.md)
+   reproduced an orphaned setter child; the explicit CLI now uses a Windows job
+   to clean up its process tree on exit. The actual setter retest passed.
    Keep command acceptance, CLI readback, GUI state and connection
    behavior distinct.
 2. **Define verified automatic application.** Establish what evidence is sufficient

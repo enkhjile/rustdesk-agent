@@ -81,10 +81,20 @@ SYSTEM and LocalService; it is not a RustDesk authorization boundary.
 
 If Windows reports abandoned ownership, the invocation exits nonzero and asks
 the operator to inspect settings before retrying. This does not roll back a
-partial write or guarantee cleanup of a child left by abrupt process death.
+partial write.
 The lock is specific to this CLI entry point: older agents, direct library calls,
 RustDesk GUI and other writers do not participate. Mismatch detection remains
 necessary, and automatic retries/writes are still disabled.
+
+Before launching RustDesk, the explicit setter also joins an unnamed,
+non-inheritable Windows Job Object configured to terminate member processes when
+its last handle closes. The CLI retains that handle until OS process teardown,
+so normal exit or forced termination also cleans up its child process tree.
+Membership is established before spawning, avoiding a spawn-then-assign gap.
+Containment setup errors fail before launching RustDesk, including incompatible
+parent-job restrictions. Existing RustDesk service/GUI processes are not added
+to this job. This applies only to `--set-option`, not detection or service polling.
+See [Windows Job Objects](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects).
 
 In the pre-serialization
 [concurrency test](validation/2026-11-09-concurrent-settings.md), overlapping
