@@ -37,6 +37,6 @@ The kiosk repository's `external/pk-libs-rs/crates/installer-tools-cli/src/rustd
 embeds RustDesk 1.4.7, invokes MSI installation, and runs `--option key value`.
 It checks exit status without independently reading settings back. It also passes
 `--password` as a process argument; do not reuse that path for secret delivery.
-The installer remains unchanged. Subsequent [isolated setter tests](validation/official-setter-validation.md)
+The installer remains unchanged. Subsequent [isolated setter tests](validation/2026-11-09-official-cli-setters.md)
 passed with the official client under both administrator and LocalService accounts.
 Independent live verification and connection behavior remain separate gates.

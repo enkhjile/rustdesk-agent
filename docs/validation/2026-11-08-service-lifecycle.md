@@ -4,7 +4,7 @@
 > revision and date, not current project status. See the [current plan](../plan.md)
 > and [validation index](README.md) for subsequent results.
 
-This record follows the [host-only attempt](windows-validation-2026-11-08.md).
+This record follows the [host-only attempt](2026-11-08-host-build-tests.md).
 It tests the read-only executable built from `0534dcab782307bddf86f41a51937577c9ea3124`
 on PR #5. No agent code or RustDesk settings were changed.
 

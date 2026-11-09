@@ -83,7 +83,7 @@ an elevated test runner and uses only random temporary paths and dummy credentia
 Windows x64 builds require the MSVC C++ tools and SDK (including the TLS dependency).
 PR #3 passed hosted Windows tests, including DPAPI round-trip and protected-store
 creation/load checks. Subsequent runtime checks are recorded in the
-[isolated VM record](validation/windows-vm-validation.md).
+[isolated VM record](validation/2026-11-08-service-lifecycle.md).
 Service-SID access, unrelated-service denial and unattended reboot passed there;
 ordinary-user token access denial and CLI initialization rejection also passed. Do not deploy on compile evidence.
 

@@ -23,7 +23,7 @@ UUID/origin and exclusively creates the Windows Known Folder ProgramData directo
 not prompt for elevation, generate identity, change credentials, contact a server,
 or install/start the service. A partial initialization requires investigation;
 rerunning cannot overwrite it. Administrator initialization and service persistence
-were exercised only in the [isolated VM](validation/windows-vm-validation.md); this is not
+were exercised only in the [isolated VM](validation/2026-11-08-service-lifecycle.md); this is not
 deployment approval.
 
 The snapshot is bound to both enrolled UUID and management origin. Missing,

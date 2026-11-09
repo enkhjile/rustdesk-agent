@@ -106,7 +106,7 @@ logs are retained under `target\validation\`; they are ignored build/lab artifac
 not tested repository tooling. `repair-in-vm.ps1` is the pending elevated resume
 step. The draft `validate-guest.ps1` sequences guest tests only after a successful
 boot. Subsequent setup completion and service results are recorded in the
-[isolated VM report](windows-vm-validation.md).
+[isolated VM report](2026-11-08-service-lifecycle.md).
 
 All of the following remain **unexecuted**, including previously reported hosted
 storage tests as local elevated validation:

@@ -10,7 +10,7 @@ blank output is still unverified, not an observed default.
 
 ## Controlled comparison
 
-This continues the [installed-binary validation](rustdesk-1.4.7-validation.md)
+This continues the [installed-binary validation](2026-11-08-rustdesk-1.4.7-getters.md)
 using the same binary hashes, dummy accounts and Windows 11 Pro 25H2 guest
 (build 26200.6584). The host is Windows 11 Pro 25H2 build 26200.9711.
 RustDesk's service was running. The agent and local HTTPS endpoint were stopped

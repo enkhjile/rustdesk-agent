@@ -69,7 +69,7 @@ its `unverified_cli_value`/`ambiguous_default`/failure status and
 means acceptance plus matching CLI readback, not verified connection behavior.
 A readback mismatch prints the report and exits nonzero. This command is not
 connected to polling or reconciliation; management still reports `unsupported`
-with null applied revision. See [isolated setter validation](validation/official-setter-validation.md).
+with null applied revision. See [isolated setter validation](validation/2026-11-09-official-cli-setters.md).
 
 A separate direct IPC reader is not a supported workaround for 1.4.7: the
 [Windows main IPC authorization](https://github.com/rustdesk/rustdesk/blob/1.4.7/src/ipc/auth.rs#L660)
@@ -94,7 +94,7 @@ The report path must be absolute and end in `.json`. Provision its directory fir
 account to write while excluding untrusted writers; protect the executable and
 SCM configuration too. The skeleton does not set or verify these ACLs. Installation
 is an administrator action, outside this implementation; installation was tested
-only in the [isolated VM](validation/windows-vm-validation.md). Do not rely on an installer/SCM default that silently selects
+only in the [isolated VM](validation/2026-11-08-service-lifecycle.md). Do not rely on an installer/SCM default that silently selects
 LocalSystem. The service account remains an explicit deployment decision.
 
 The service probes and (when enrolled) polls immediately, then waits 60 seconds
@@ -144,16 +144,16 @@ To stop polling, stop the agent service. Do not delete enrollment as a toggle.
 
 ## Validation status
 
-The [isolated VM service run](validation/windows-vm-validation.md) passed
+The [isolated VM service run](validation/2026-11-08-service-lifecycle.md) passed
 service-SID access, ordinary-user/unrelated-service denial, administrator
 initialization, HTTP cancellation/retries and unattended reboot as LocalService.
-The [installed-client run](validation/rustdesk-1.4.7-validation.md) additionally
+The [installed-client run](validation/2026-11-08-rustdesk-1.4.7-getters.md) additionally
 verified cancellation of a stalled real CLI child.
 
 Early blank option results under both accounts were not proof of a LocalService
-permission failure. The [getter/GUI diagnosis](validation/rustdesk-getter-diagnosis.md)
+permission failure. The [getter/GUI diagnosis](validation/2026-11-08-getter-diagnosis-and-gui.md)
 showed that defaults can produce blank CLI output. The subsequent
-[actual agent setter run](validation/official-setter-validation.md) successfully
+[actual agent setter run](validation/2026-11-09-official-cli-setters.md) successfully
 changed both settings as administrator and LocalService, with matching reads from
 the other account and retained values after service restart and VM reboot.
 Original values were restored and the VM shut down. No guest UAC interaction

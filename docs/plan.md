@@ -16,10 +16,10 @@ PR #12; dated results belong in the [validation archive](validation/README.md).
 | Read-only detector | Bounded official CLI queries; settings are `unverified_cli_value` or `ambiguous_default`, never verified live. A real stalled getter child was terminated on service stop. |
 | Explicit local setter | `--set-option` accepts only approve-mode and verification-method values for 1.4.7. Tested as administrator and LocalService, with cross-account readback and restart/reboot persistence. It is not invoked by polling. |
 
-The [service record](validation/windows-vm-validation.md) contains the isolation
-and lifecycle evidence. The [getter diagnosis](validation/rustdesk-getter-diagnosis.md)
+The [service record](validation/2026-11-08-service-lifecycle.md) contains the isolation
+and lifecycle evidence. The [getter diagnosis](validation/2026-11-08-getter-diagnosis-and-gui.md)
 explains blank defaults and the missing-NIC ID result. The
-[setter record](validation/official-setter-validation.md) records exact commands,
+[setter record](validation/2026-11-09-official-cli-setters.md) records exact commands,
 hashes, restored originals and passing hosted CI.
 
 Official RustDesk supports the tested setters without modification. The upstream
