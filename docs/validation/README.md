@@ -34,6 +34,6 @@ permanent-only mode, while service reports remained explicitly unverified.
 
 All runtime work used disposable isolated Windows VMs and dummy credentials.
 The [credential rotation test](credential-rotation.md) passed administrator
-replacement, interrupted handoff, restart and revocation recovery; ordinary-user
-CLI replacement rejection remains inconclusive.
+replacement, interrupted handoff, restart and revocation recovery, plus
+ordinary-user CLI replacement rejection without changing protected files.
 These records do not authorize production deployment or automatic service writes.

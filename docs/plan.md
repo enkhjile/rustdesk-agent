@@ -75,8 +75,8 @@ that limitation is not evidence that setters need a custom client.
    read-only polling/report storage and revocation. This change adds local
    administrator credential replacement; the companion Console change provides
    rotation without resetting identity or history. Their isolated
-   [recovery test](validation/credential-rotation.md) passed; ordinary-user CLI
-   replacement rejection remains a validation gate. Enrollment UI remains unfinished.
+   [recovery test](validation/credential-rotation.md) passed, including ordinary-user
+   CLI replacement rejection. Enrollment UI remains unfinished.
    Define heartbeat/error reporting without a desired revision. Validate installer
    permissions, executable provenance/signing, report-directory protection,
    report-write failure handling and physical power-loss durability. Select a

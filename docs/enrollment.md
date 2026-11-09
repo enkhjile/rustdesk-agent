@@ -112,8 +112,8 @@ Replacement tests cover invalid credentials and unchanged identity, protected
 staging recovery, failed replacement preserving the old blob, and rejection of
 changed identity or access policy. The [rotation validation](validation/credential-rotation.md)
 passed real-service replacement, interrupted handoff and restart/revocation
-recovery. Ordinary-user CLI replacement rejection remains unverified; prior
-initialization-denial results do not establish that separate check.
+recovery. The actual replacement CLI also rejected an ordinary local user with
+`PermissionDenied`, preserving the enrollment/state files and their permissions.
 
 Windows x64 builds require the MSVC C++ tools and SDK (including the TLS dependency).
 PR #3 passed hosted Windows tests, including DPAPI round-trip and protected-store
