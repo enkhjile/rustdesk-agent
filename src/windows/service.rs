@@ -130,8 +130,11 @@ fn run(
     let enrollment_info = enrollment.as_ref().map(|value| value.info());
     runtime.block_on(async {
         let mut poller = enrollment
-            .map(|enrollment| -> Result<_, Box<dyn std::error::Error>> {
+            .map(|_| -> Result<_, Box<dyn std::error::Error>> {
                 let store = rustdesk_agent::state_store::FileStore::open()?;
+                // Reload under the writer lock: replacement may have completed
+                // between the initial presence check and acquiring this lock.
+                let enrollment = rustdesk_agent::credentials::load()?;
                 Ok(rustdesk_agent::management::Poller::new(enrollment, store)?)
             })
             .transpose()?;

@@ -1,12 +1,13 @@
-//! Machine DPAPI plus a protected, create-once store. No plaintext files.
+//! Machine DPAPI plus protected creation and administrator-only replacement.
 use crate::enrollment::Enrollment;
+use crate::state::{DurableState, StateStore};
 use std::{
     ffi::{OsStr, OsString, c_void},
-    fs::File,
+    fs::{File, OpenOptions},
     io::{self, Read, Write},
     os::windows::{
         ffi::{OsStrExt, OsStringExt},
-        fs::MetadataExt,
+        fs::{MetadataExt, OpenOptionsExt},
         io::{AsRawHandle, FromRawHandle},
     },
     path::{Path, PathBuf},
@@ -303,6 +304,61 @@ pub fn load() -> io::Result<Enrollment> {
     load_at(&path, &policy(&service_sid()?)?)
 }
 
+/// Replace only the credential. A valid initialized state and exclusive writer
+/// lock are required; identity and reporting history are never reset.
+pub fn replace_credential(
+    credential: Zeroizing<String>,
+) -> io::Result<crate::enrollment::EnrollmentInfo> {
+    require_admin()?;
+    let mut store = crate::state_store::FileStore::open()?;
+    let path = root()?;
+    let descriptor = policy(&service_sid()?)?;
+    let enrollment = load_at(&path, &descriptor)?;
+    DurableState::decode(&store.load()?, &enrollment.info()).map_err(io::Error::other)?;
+    let replacement = enrollment
+        .with_credential(credential)
+        .map_err(io::Error::other)?;
+    replace_at(&path, &descriptor, &replacement)?;
+    Ok(replacement.info())
+}
+
+fn replace_at(path: &Path, descriptor: &LocalMemory, enrollment: &Enrollment) -> io::Result<()> {
+    // Pin the directory against rename/delete while permitting child replacement.
+    let directory = OpenOptions::new()
+        .read(true)
+        .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS)
+        .open(path)?;
+    verify(&directory, descriptor, true)?;
+    let current = load_at(path, descriptor)?;
+    if current.info() != enrollment.info() {
+        return Err(invalid());
+    }
+    let encrypted = protect(&enrollment.encode().map_err(|_| invalid())?, false)?;
+    let temp = path.join("enrollment.next");
+    match open(&temp, None, false) {
+        Ok(file) => {
+            verify(&file, descriptor, false)?;
+            drop(file);
+            std::fs::remove_file(&temp)?;
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => (),
+        Err(error) => return Err(error),
+    }
+    let mut file = open(&temp, Some(descriptor), false)?;
+    verify(&file, descriptor, false)?;
+    file.write_all(&encrypted)?;
+    file.sync_all()?;
+    drop(file);
+    check(unsafe {
+        MoveFileExW(
+            wide(&temp).as_ptr(),
+            wide(path.join(FILE_NAME)).as_ptr(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -344,6 +400,54 @@ mod tests {
         assert!(load_at(&path, &different_policy).is_err());
         std::fs::write(path.join(FILE_NAME), b"corrupt").unwrap();
         assert!(load_at(&path, &descriptor).is_err());
+        std::fs::remove_file(path.join(FILE_NAME)).unwrap();
+        std::fs::remove_dir(path).unwrap();
+    }
+
+    #[test]
+    fn replacement_recovers_staging_and_rejects_wrong_identity_or_policy() {
+        require_admin().unwrap();
+        let path =
+            std::env::temp_dir().join(format!("rustdesk-rotation-test-{}", uuid::Uuid::new_v4()));
+        let descriptor = policy("S-1-5-80-1-2-3-4-5").unwrap();
+        let enrollment = Enrollment::new(
+            "https://example.test",
+            Zeroizing::new("original-test-credential-0123456789abcdef".into()),
+        )
+        .unwrap();
+        save_at(&path, &descriptor, &enrollment).unwrap();
+        let original = std::fs::read(path.join(FILE_NAME)).unwrap();
+        let different = Enrollment::new(
+            "https://example.test",
+            Zeroizing::new("different-test-credential-0123456789abcdef".into()),
+        )
+        .unwrap();
+        assert!(replace_at(&path, &descriptor, &different).is_err());
+        let replacement = enrollment
+            .with_credential(Zeroizing::new(
+                "replacement-test-credential-0123456789abcdef".into(),
+            ))
+            .unwrap();
+        // An interrupted write leaves a protected partial stage and the original intact.
+        let temp = path.join("enrollment.next");
+        let wrong_policy = policy("S-1-5-80-5-4-3-2-1").unwrap();
+        drop(open(&temp, Some(&wrong_policy), false).unwrap());
+        assert!(replace_at(&path, &descriptor, &replacement).is_err());
+        assert_eq!(std::fs::read(path.join(FILE_NAME)).unwrap(), original);
+        std::fs::remove_file(&temp).unwrap();
+        let mut staged = open(&temp, Some(&descriptor), false).unwrap();
+        staged.write_all(b"partial").unwrap();
+        staged.sync_all().unwrap();
+        drop(staged);
+        let held = open(&path.join(FILE_NAME), None, false).unwrap();
+        assert!(replace_at(&path, &descriptor, &replacement).is_err());
+        assert_eq!(std::fs::read(path.join(FILE_NAME)).unwrap(), original);
+        drop(held);
+        replace_at(&path, &descriptor, &replacement).unwrap();
+        let loaded = load_at(&path, &descriptor).unwrap();
+        assert_eq!(loaded.info(), replacement.info());
+        assert_eq!(loaded.credential(), replacement.credential());
+        assert!(!temp.exists());
         std::fs::remove_file(path.join(FILE_NAME)).unwrap();
         std::fs::remove_dir(path).unwrap();
     }

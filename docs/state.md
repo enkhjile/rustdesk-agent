@@ -37,7 +37,9 @@ deployment approval.
 The snapshot is bound to both enrolled UUID and management origin. Missing,
 invalid, oversized, inaccessible or mismatched state stops enrolled service startup.
 Missing enrollment still permits local detection without network requests.
-There is no automatic reset, import, repair or recovery command.
+There is no state reset, import or repair command. Administrator
+[credential replacement](enrollment.md#credential-rotation-and-recovery) requires
+valid state, takes the same writer lock and leaves the snapshot unchanged.
 
 ## Storage boundary
 

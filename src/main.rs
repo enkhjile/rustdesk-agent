@@ -14,13 +14,14 @@ mod process_job;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use std::path::PathBuf;
     let args: Vec<_> = std::env::args_os().skip(1).collect();
-    if args.len() == 2 && args[0] == "--enroll" {
+    if (args.len() == 2 && args[0] == "--enroll")
+        || (args.len() == 1 && args[0] == "--replace-credential")
+    {
         use std::io::{IsTerminal, Read};
         use zeroize::Zeroizing;
         if std::io::stdin().is_terminal() {
             return Err("Supply the device credential through redirected stdin; interactive entry is disabled".into());
         }
-        let origin = args[1].to_str().ok_or("invalid management origin")?;
         let mut bytes = Zeroizing::new(Vec::new());
         std::io::stdin().take(259).read_to_end(&mut bytes)?;
         let input = std::str::from_utf8(&bytes).map_err(|_| "invalid device credential")?;
@@ -28,7 +29,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .strip_suffix("\r\n")
             .or_else(|| input.strip_suffix('\n'))
             .unwrap_or(input);
-        let info = rustdesk_agent::credentials::enroll(origin, Zeroizing::new(input.to_owned()))?;
+        let credential = Zeroizing::new(input.to_owned());
+        let info = if args[0] == "--replace-credential" {
+            rustdesk_agent::credentials::replace_credential(credential)?
+        } else {
+            let origin = args[1].to_str().ok_or("invalid management origin")?;
+            rustdesk_agent::credentials::enroll(origin, credential)?
+        };
         println!("{}", serde_json::to_string_pretty(&info)?);
         Ok(())
     } else if args.len() == 1 && args[0] == "--init-state" {
@@ -81,7 +88,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             args.len() == 4,
         )
     } else {
-        Err("Usage: rustdesk-agent --enroll <https-origin> (credential on stdin) | --init-state | --enrollment-info | --detect <absolute RustDesk.exe path> | --set-option <absolute RustDesk.exe path> <setting> <value> | --service <absolute RustDesk.exe path> <absolute report.json path>".into())
+        Err("Usage: rustdesk-agent --enroll <https-origin> (credential on stdin) | --replace-credential (credential on stdin) | --init-state | --enrollment-info | --detect <absolute RustDesk.exe path> | --set-option <absolute RustDesk.exe path> <setting> <value> | --service <absolute RustDesk.exe path> <absolute report.json path>".into())
     }
 }
 

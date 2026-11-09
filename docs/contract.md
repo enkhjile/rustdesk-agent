@@ -1,6 +1,17 @@
-# Management contract (test backend only)
+# Management contract
 
-Implemented only by the local [contract fixture](contract-testing.md), not an existing Console API or production service. TLS with normal hostname/certificate validation is mandatory. Each bearer credential identifies exactly one provisioned UUID; never authorize based on a body or path UUID alone. Credentials must not appear in URLs, process arguments, reports or logs. The production backend must retain credential hashes and support rotation/revocation and audit; these are not implemented by the test fixture. Local provisioning is documented in [enrollment.md](enrollment.md); backend enrollment and authorization UX remain to be designed. Limit requests/responses and enforce read/write deadlines. No redirects. Fixed origin is provisioned locally by an administrator. These routes and JSON are proposals, not claims about v0.2.40.
+Implemented by the local [contract fixture](contract-testing.md) and the
+[Console fork integration](https://github.com/enkhjile/rustdesk-console/blob/main/docs/companion-agent.md).
+This does not imply production deployment or support in upstream v0.2.40.
+TLS with normal hostname/certificate validation is mandatory. Each bearer
+credential identifies exactly one provisioned UUID; never authorize based on a
+body or path UUID alone. Credentials must not appear in URLs, process arguments,
+reports or logs. Console stores credential hashes and supports revocation; the
+companion rotation change adds administrator-issued replacements. The in-process
+fixture does not implement those administrator operations. Local provisioning
+and replacement are documented in [enrollment.md](enrollment.md). Enrollment UI
+remains unfinished. Limit requests/responses and enforce read/write deadlines.
+No redirects. Fixed origin is provisioned locally by an administrator.
 
 `GET /v1/agent/desired` with `Authorization: Bearer <device credential>` returns HTTP 200, content-type JSON:
 

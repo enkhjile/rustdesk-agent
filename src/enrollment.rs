@@ -1,4 +1,4 @@
-//! Validated local enrollment. No server registration or credential rotation.
+//! Validated local enrollment and identity-preserving credential replacement.
 use serde::{Deserialize, Serialize};
 use url::Url;
 use uuid::Uuid;
@@ -73,6 +73,11 @@ impl Enrollment {
     }
     pub(crate) fn credential(&self) -> &str {
         &self.credential
+    }
+    pub fn with_credential(self, credential: Zeroizing<String>) -> Result<Self, &'static str> {
+        let replacement = Self { credential, ..self };
+        replacement.validate()?;
+        Ok(replacement)
     }
     pub fn info(&self) -> EnrollmentInfo {
         EnrollmentInfo {

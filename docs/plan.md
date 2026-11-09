@@ -71,8 +71,12 @@ that limitation is not evidence that setters need a custom client.
    Exercise revision changes, drift, partial outcomes and status against actual
    connection behavior in an isolated management canary. Production service writes
    stay disabled until this is implemented and validated.
-3. **Complete deployment work.** Implement a production backend or Console
-   extension, server registration, credential rotation/revocation and audit.
+3. **Complete deployment work.** The Console fork now provides registration,
+   read-only polling/report storage and revocation. This change adds local
+   administrator credential replacement; the companion Console change provides
+   rotation without resetting identity or history. Their isolated
+   [recovery test](validation/credential-rotation.md) passed, including ordinary-user
+   CLI replacement rejection. Enrollment UI remains unfinished.
    Define heartbeat/error reporting without a desired revision. Validate installer
    permissions, executable provenance/signing, report-directory protection,
    report-write failure handling and physical power-loss durability. Select a
