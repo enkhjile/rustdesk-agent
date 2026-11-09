@@ -1,4 +1,4 @@
-# Isolated Windows VM validation — 2026-11-08
+# Isolated Windows service behavior
 
 > Historical validation record: results and pending checks describe the tested
 > revision and date, not current project status. See the [current plan](../plan.md)
@@ -15,7 +15,6 @@ on PR #5. No agent code or RustDesk settings were changed.
 - Windows 11 Pro 25H2, `10.0.26200.6584`, installed from the host's existing Japanese 25H2
   ISO, image index 3. Setup account: `RDAGENT-LAB\LabAdmin` (elevated).
 - Agent account: `NT AUTHORITY\LocalService`, service SID enabled/unrestricted.
-  Agent SID: `S-1-5-80-312778130-3777190381-3969750968-319843892-2371153462`.
 - RustDesk intentionally absent: the service receives `C:\Lab\missing-rustdesk.exe`.
   Getter/IPC behavior against an installed RustDesk is not validated here.
 - Dummy credentials only. Test endpoint: `https://localhost:8443`, TLS listener
@@ -104,8 +103,8 @@ These checks completed on the real SCM service, not an in-process poller:
 | Stop during an eight-second GET delay | STOPPED in 251 ms; Win32/service exit codes 0 |
 | POST 204 acknowledgement | Pending report cleared durably |
 | Fresh observation before reboot | Revision 7, sequence 3, pending report retained after POST 503 |
-| Guest reboot | LastBootUpTime `2026-11-08T18:22:56.9498890+09:00`; service automatically RUNNING as LocalService, exit codes 0 |
-| Report after reboot | Same sequence-3 body acknowledged at `18:23:09+09:00`; committed state retained revision 7/sequence 3 and had `pending: null` |
+| Guest reboot | Service automatically RUNNING as LocalService, exit codes 0 |
+| Report after reboot | Same sequence-3 body acknowledged; committed state retained revision 7/sequence 3 and had `pending: null` |
 
 The harness changed only its own `C:\Lab\control.json`, used `Start-Service` and
 `Stop-Service RustDeskAgent`, checked `sc.exe queryex RustDeskAgent`, and read
@@ -121,10 +120,10 @@ Executable SHA-256, independently read inside the guest:
 
 ## Ordinary-user checks and retained artifacts
 
-Ordinary-user file-access checks completed at `19:18:06+09:00`. The harness used
+Ordinary-user file-access checks used
 `LogonUserW` (batch logon, type 4), then `WindowsIdentity.Impersonate` and the same
 `CreateFileW` access masks as the service helper. The recorded identity was
-`RDAGENT-LAB\LabUser`, SID `S-1-5-21-3490330849-2768354856-2119030319-1002`.
+`RDAGENT-LAB\LabUser`.
 Its groups included Users and Batch, not Administrators or the agent service SID.
 All six requests returned error 5. This exercises actual Windows access checks
 under an ordinary-user token; it does not claim an interactive-user CLI run.
@@ -136,7 +135,7 @@ and SHA-256 of `state.json` before and after was identical:
 cmd.exe /c 'C:\Lab\rustdesk-agent.exe --init-state > C:\Lab\Results\repeat-init.stdout 2> C:\Lab\Results\repeat-init.stderr'
 ```
 
-The ordinary-user `--init-state` CLI check passed at `19:40:57+09:00` using
+The ordinary-user `--init-state` CLI check passed using
 [the retained manual harness](../../tests/manual/user-init.ps1). It runs a temporary
 SCM helper as `RDAGENT-LAB\LabUser`, which starts the actual agent executable with
 `--init-state` and redirected stdout/stderr. The recorded token included Users
@@ -158,13 +157,6 @@ change was needed. The temporary service was removed, and the original
 `SeServiceLogonRight` assignment was restored. The helper has no credentials
 embedded in its source; the guest-only runner supplied the existing dummy
 credential as a `PSCredential`.
-
-The earlier scheduled-task attempts failed or remained queued; direct
-`CreateProcessWithTokenW` children failed during initialization (`0xC0000142` or
-`0x8007045A`). Using a normal SCM-created user session bypassed that failing launch
-path. The precise cause of those initialization failures was not established.
-An initial service-logon policy attempt also failed; diagnostic output was added,
-and the subsequent run completed. These harness failures are not agent failures.
 
 To reproduce in the already provisioned disposable guest, copy the manual script
 there, then run in elevated PowerShell (archive previous probe output first):
@@ -192,12 +184,7 @@ and logs are under `C:\Lab`. These local harness files are not shipped agent
 features. Final cleanup ran `Stop-VM -Name RustDeskAgent-Validation` after checking that it still had no network adapters. Hyper-V confirmed its state was `Off`. The agent and endpoint had already been stopped after reboot validation. No production
 endpoint, real credential, RustDesk write, merge or release was involved.
 
-Remaining separate gates include installed RustDesk getter/IPC behavior and stop
-during an active CLI child, physical power-loss durability, and any future write
-adapter. This read-only run does not authorize settings writes or deployment.
-
-Setup issues were confined to the harness: host-side BCD hive collision (resolved
-by repair inside Windows PE), copied read-only WIM, automatically inserted MSR
-partition, unavailable 8 GiB allocation, automatic checkpoint disk paths and the
-guest's default script execution policy. The final VM uses 4 GiB and automatic
-checkpoints are disabled. No agent implementation failure has been demonstrated.
+This run did not test installed RustDesk or settings writes. Subsequent records
+cover [installed getters and child cancellation](2026-11-08-rustdesk-1.4.7-getters.md)
+and [explicit setters](2026-11-09-official-cli-setters.md). Physical power-loss
+durability remains untested; these results do not authorize deployment.

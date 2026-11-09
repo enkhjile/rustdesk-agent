@@ -1,4 +1,4 @@
-# Windows validation attempt — 2026-11-08 (Asia/Tokyo)
+# Windows host build and test results
 
 > Historical validation record: results and pending checks describe the tested
 > revision and date, not current project status. See the [current plan](../plan.md)
@@ -10,18 +10,6 @@ completed Windows service canary**. No application code was changed.
 
 ## Host and scope
 
-Commands run from `C:\Users\user\rustdesk-agent` in PowerShell:
-
-```powershell
-whoami
-whoami /groups
-Get-CimInstance Win32_OperatingSystem | Select-Object Caption,Version,BuildNumber
-Get-CimInstance Win32_ComputerSystem | Format-List Manufacturer,Model
-Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' |
-    Select-Object ProductName,DisplayVersion,CurrentBuild,UBR
-Get-Service RustDeskAgent -ErrorAction SilentlyContinue
-```
-
 Account: `DESKTOP-OGKKQK4\user`, medium integrity outside the tool sandbox;
 Administrators membership is deny-only, not elevated. OS: Microsoft Windows 11
 Pro, version `10.0.26200`, display version `25H2`, build `26200.9711`.
@@ -31,17 +19,11 @@ so the requested builds/tests-only fallback was used. No services, enrollment,
 state stores, trust roots or credentials were provisioned; no reboot or RustDesk
 probe was performed. Production was not contacted.
 
-Initial sandboxed Git/toolchain operations were denied filesystem access and
-CIM queries were denied. Repeating outside the tool sandbox allowed those
-operations; that did not elevate the Windows account.
-
 ## Commands and results
 
-The missing pinned toolchain was installed without changing `rust-toolchain.toml`:
+Checks used the pinned Rust 1.99.1 toolchain:
 
 ```powershell
-git fetch origin feat/durable-state-reporting
-rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
 cargo fmt --check
 cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked
@@ -49,8 +31,6 @@ cargo build --locked --target x86_64-pc-windows-msvc
 cargo test --locked --test contract_backend --test enrollment --test reconcile
 cargo test --locked --bin rustdesk-agent
 cargo test --locked --doc
-rustc -Vv
-Get-FileHash target/x86_64-pc-windows-msvc/debug/rustdesk-agent.exe -Algorithm SHA256
 ```
 
 - Formatting and Clippy passed with Rust 1.99.1.
@@ -83,48 +63,13 @@ in memory; dropping the fixture stops it. The service executable cannot simply
 use that client or its ephemeral trust configuration. No standalone management
 server was deployed. See [contract testing](../contract-testing.md).
 
-## Remaining gates on an isolated disposable VM
+## Limits and follow-up
 
-### VM setup follow-up (same day)
+This run covered builds and in-process tests only. Administrator-only storage,
+SCM lifecycle, service-token isolation and reboot behavior were not exercised
+on the physical host. Those checks subsequently passed in the
+[isolated VM run](2026-11-08-service-lifecycle.md).
 
-The user subsequently authorized creation of an isolated VM. Hyper-V is installed;
-the host has approximately 32 GiB RAM and had 171 GB free on C:. The existing ISO
-`C:\Users\user\Downloads\Win11_25H2_Japanese_x64.iso` contains Windows 11 Pro at
-image index 3. An elevated setup applied that image to a new 64 GiB dynamic VHDX
-and created `RustDeskAgent-Validation`: generation 2, 8 GiB RAM, four virtual CPUs,
-vTPM, and **no network adapter**. No existing VM was replaced.
-
-Setup is incomplete. Host-side `bcdboot G:\Windows /s F: /f UEFI /c /v`, targeting
-only the mounted lab disk, failed with exit 183 / `c0000035` while opening the
-lab BCD hive as `BCD00000000`. The host BCD was not repaired or unloaded. A separate
-2 GiB Windows PE repair disk was prepared to perform boot setup inside the guest.
-Mounting its copied `boot.wim` for modification failed because the copy retained
-the ISO's read-only attribute. The resume script was updated to clear that attribute.
-
-The VM has not booted and no guest service test has run. Host-local scripts and
-logs are retained under `target\validation\`; they are ignored build/lab artifacts,
-not tested repository tooling. `repair-in-vm.ps1` is the pending elevated resume
-step. The draft `validate-guest.ps1` sequences guest tests only after a successful
-boot. Subsequent setup completion and service results are recorded in the
-[isolated VM report](2026-11-08-service-lifecycle.md).
-
-All of the following remain **unexecuted**, including previously reported hosted
-storage tests as local elevated validation:
-
-- Run the complete pinned-toolchain suite elevated, then enroll with dummy
-  credentials and initialize state under an administrator. Verify ordinary-user
-  initialization is refused and repeated initialization cannot reset history.
-- Use an isolated HTTPS endpoint with certificate validation intact and record
-  its setup/cleanup. Keep it available across the client reboot; the current
-  in-process fixture does not provide this lifecycle.
-- Record the explicit service account and token/service SID. Verify agent-SID
-  enrollment read and state replacement; deny ordinary users and an unrelated
-  service, including a service sharing the account. Attempt state-file DACL
-  changes after the agent creates replacement files, not only after admin setup.
-- Exercise SCM start, stop during GET and POST, restart and reboot; record SCM
-  exit status, timestamps, pending report bytes, revision and sequence before/after.
-  Inject report failures and check identical retries, acknowledgement persistence
-  and retained ordering. Observe absence of UAC prompts after setup.
-- Preserve exact commands, Windows build, account, executable hash and results.
-  Re-run the failing storage tests; do not count compilation or synthetic SIDs
-  as service isolation evidence. RustDesk writes remain disabled.
+No host services, credentials or RustDesk settings were changed. Raw logs remain
+under ignored `target/validation/`; VM setup troubleshooting is not part of the
+agent's behavior or these test results.

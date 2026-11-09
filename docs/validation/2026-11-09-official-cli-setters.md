@@ -1,4 +1,4 @@
-# Official CLI setter validation — 2026-11-09
+# Official CLI setter behavior
 
 > Historical validation record: results and pending checks describe the tested
 > revision and date, not current project status. See the [current plan](../plan.md)
@@ -20,6 +20,7 @@ of live connection behavior.
   `7A43F30721826E6D6B11686A47B3F6D672DC58C1BDB2B62076D704E8BA5235C0`.
 - Agent: `C:\Lab\rustdesk-agent-setter.exe`, Windows x64 debug build, SHA256
   `BCCB78A0FF822EE2B87DBB2D739FEB2F2EEDE36E33B63CB8D15A1F941FF16988`.
+  Tested setter implementation: commit `7f497af` (PR #12).
   The existing agent service executable was not replaced.
 
 Exact setter commands, first two as LabAdmin, last two as LocalService:
@@ -36,39 +37,39 @@ Each invocation runs `--version`, then `--option <key> <value>`, then
 runs both official getters independently after writes and under the other
 account. It uses `UseShellExecute=false`, not interactive elevation.
 
-## Results (JST)
+## Results
 
-| Time | Check | Result |
-| --- | --- | --- |
-| 11:51:36–37 | Baseline under both accounts | Both raw option values empty |
-| 11:51:37–39 | Administrator writes; LocalService reads | `password`, `use-temporary-password` |
-| 11:51:40–41 | LocalService writes; administrator reads | `click`, `use-both-passwords` |
-| 11:51:45 | `Restart-Service RustDesk`, both accounts read | Both values retained |
-| 11:52:22–23 | Host `Stop-VM` / `Start-VM`, both accounts read | Both values retained |
-| 11:52:24–26 | Restore both accounts; final LocalService read | Both raw option values empty again |
-| 11:52:28 | Cleanup | Temporary service removed, VM `Off` |
+| Check | Result |
+| --- | --- |
+| Baseline under both accounts | Both raw option values empty |
+| Administrator writes; LocalService reads | `password`, `use-temporary-password` |
+| LocalService writes; administrator reads | `click`, `use-both-passwords` |
+| `Restart-Service RustDesk`, both accounts read | Both values retained |
+| Host `Stop-VM` / `Start-VM`, both accounts read | Both values retained |
+| Restore both accounts; final LocalService read | Both raw option values empty again |
+| Cleanup | Temporary service removed, VM `Off` |
 
 All four agent invocations exited zero, with empty stderr,
 `command_accepted=true`, `readback_matches=true`, and
 `live_state_verified=false`. No guest UAC interaction was needed. Host elevation
-was needed once for Hyper-V. Agent and local HTTPS fixture were stopped during
+was required for Hyper-V. Agent and local HTTPS fixture were stopped during
 the test. No server contact, TOML editing, password provisioning or client patch.
 
+A separate direct-official-CLI test also showed click approval in the locked GUI.
+Verification-method controls were hidden in that mode and were **not** visually
+verified. This GUI observation was not part of the actual agent setter run above.
+
+## Cleanup and evidence
+
+Both original raw option values were restored and read back under both accounts.
 Restoration used the official CLI with an explicit empty final argument:
 `--option approve-mode ""` and `--option verification-method ""`, then getters.
-The new agent deliberately rejects empty values. The harness now reconnects
-PowerShell Direct for cleanup and uses an outer `finally` for VM shutdown;
-startup/reboot transient connection errors were retried successfully.
+The agent deliberately rejects empty values. The temporary service was removed,
+agent/endpoint stopped and VM shut down.
 
-Local evidence is retained under ignored `target/validation/`:
+Local evidence remains under ignored `target/validation/`:
 `run-agent-setters.ps1`, `AgentSettingsProbe.cs`, `agent-setters-v1.host.log`,
 `settings-agent-v1-*.txt`, and `agent-setters-v1-final-state.txt`.
-
-An earlier direct-official-CLI run also passed both accounts and persistence.
-Its cleanup failed after the remote session was lost; a separate recovery
-restored both raw values and shut down the VM at 11:41:13. At 11:40 the locked GUI
-showed click approval. Verification-method controls were hidden in that mode and
-were **not** visually verified. The agent run above used a fresh session for cleanup.
 
 ## Automated checks and remaining gates
 
