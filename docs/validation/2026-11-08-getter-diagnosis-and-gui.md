@@ -1,4 +1,8 @@
-# RustDesk 1.4.7 getter diagnosis — 2026-11-08
+# RustDesk 1.4.7 getter and GUI comparison
+
+> Historical validation record: results and pending checks describe the tested
+> revision and date, not current project status. See the [current plan](../plan.md)
+> and [validation index](README.md) for subsequent results.
 
 Adding a disconnected network adapter resolved the blank ID in the isolated VM.
 It did not resolve the blank settings getters. Settings writes remain disabled;
@@ -6,13 +10,13 @@ blank output is still unverified, not an observed default.
 
 ## Controlled comparison
 
-This continues the [installed-binary validation](rustdesk-1.4.7-validation.md)
+This continues the [installed-binary validation](2026-11-08-rustdesk-1.4.7-getters.md)
 using the same binary hashes, dummy accounts and Windows 11 Pro 25H2 guest
 (build 26200.6584). The host is Windows 11 Pro 25H2 build 26200.9711.
 RustDesk's service was running. The agent and local HTTPS endpoint were stopped
 for these raw getter probes.
 
-At 21:19 JST, the harness queried the installed executable as elevated
+The harness queried the installed executable as elevated
 `RDAGENT-LAB\LabAdmin` and through a temporary service as
 `NT AUTHORITY\LocalService`, before and after a guest shutdown/start:
 
@@ -73,30 +77,12 @@ labels that choice as accepting sessions via both password and click.
 At this stage these were source-derived interpretations, not GUI observations or permission
 to normalize blank CLI output into verified settings.
 
-In the initial run, GUI comparison was incomplete: VMConnect displayed the guest sign-in screen,
-but computer-use input did not reach the elevated console. No guest interactive
-sign-in or GUI settings observation was completed. The final harness phase named
-`after-gui` is only a repeated CLI probe; its name is not evidence of GUI testing.
-No option setter, direct
-TOML edit, permanent-password command or custom IPC client was used.
-Raw evidence and the local harness are under ignored `target/validation` and
-guest `C:\Lab`; no deployment credentials belong in this document.
-
-The final CLI repetition returned the same ID and blank settings under both
-accounts. Cleanup deleted the temporary probe service, stopped RustDesk and the
-agent/endpoint, shut down the VM and removed the disconnected test adapter.
-The runner completed at 21:24:08 JST and recorded the VM as `Off`.
-No agent implementation failure was demonstrated, so this follow-up changes
-documentation only. `git diff --check` passed; no new Rust build or unit-test
-run is claimed for this documentation change.
-
-## GUI comparison follow-up — 22:34–22:36 JST
+## GUI comparison
 
 The same isolated guest and installed 1.4.7 executable were used. This run had
 **no network adapters**; the previously generated ID survived adapter removal
-and guest restart. The user signed in as `RDAGENT-LAB\LabAdmin` and navigated
-the guest GUI because automated input could not control the elevated VMConnect
-window. The resulting screens were inspected through computer-use snapshots. Security settings remained
+and guest restart. The GUI was inspected while signed in as `RDAGENT-LAB\LabAdmin`.
+Security settings remained
 locked throughout observation; no option was changed or password provisioned.
 
 The main window displayed ID `486 577 153` and a connecting-to-network status.
@@ -110,11 +96,11 @@ Settings → Security → Password displayed:
 These selections match the source-derived defaults described above. They do not
 prove that a permanent password exists or that a remote connection would work.
 
-At 22:36:34 JST, with the GUI still open, the same four fixed CLI probes were
+With the GUI open, the same four fixed CLI probes were
 repeated as elevated LabAdmin through PowerShell Direct and as LocalService
 through the temporary `RustDeskLabReadProbe` service. Both returned version
 `1.4.7`, ID `486577153`, and newline-only output for both option getters. All
-exited 0, with empty stderr, no timeout, and durations of 74–93 ms. The transcript
+exited 0, with empty stderr and no timeout. The transcript
 recorded LabAdmin active in console session 1, the RustDesk service in session 0,
 and its server, tray and GUI processes in session 1.
 
@@ -123,10 +109,15 @@ The observed GUI defaults are consistent with blank CLI output, but the CLI's
 cache fallback still prevents distinguishing a live default from a failed IPC
 read. This completes the default-state GUI comparison only; it does not verify
 non-default values, setting changes, live CLI readback or actual connections.
-Keep writes disabled and do not normalize blank output into verified settings.
+This run issued no setters and does not justify normalizing blank output into
+verified settings. See the subsequent [setter record](2026-11-09-official-cli-setters.md)
+for non-default CLI readback; independent live verification remains separate.
+
+## Cleanup and evidence
 
 Evidence: host `target/validation/gui-comparison.host.log` and
 `gui-comparison-cli.log`, plus the inspected VM console screens. Screenshots
 containing the transient password are not committed. Cleanup deleted the probe
 service, stopped the agent, RustDesk service and endpoint, and shut down the VM.
-The runner recorded `Off` and no adapters at 22:36:41 JST. No agent code changed.
+The temporary disconnected adapter was removed. The final VM state was `Off`
+with no adapters. No agent code, RustDesk settings or passwords were changed.

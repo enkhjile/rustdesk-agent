@@ -7,8 +7,8 @@ cargo test --locked --test contract_backend
 ```
 
 They also run with the normal `cargo test --locked` command, which Windows CI
-is configured to execute. Local verification was on macOS; the fixture also passed the
-[Windows CI run for PR #1](https://github.com/enkhjile/rustdesk-agent/actions/runs/42386981526).
+is configured to execute. The fixture has passed on macOS, local Windows and
+hosted Windows; see the [validation records](validation/README.md).
 The fixture is in `tests/support/mod.rs`. Its server, certificate-generation and
 JSON Schema dependencies remain dev-only. The agent now uses reqwest and rustls
 as runtime dependencies for read-only HTTPS polling. No second language, external certificate tool or extra CI

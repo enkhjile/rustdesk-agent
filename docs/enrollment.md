@@ -40,7 +40,7 @@ DPAPI output buffer is cleared before freeing. This reduces retention; it is not
 a guarantee against memory capture or copies made inside OS/serialization code.
 Debug output redacts the credential. Error messages do not include input values.
 
-## Provisioning workflow (not executed)
+## Provisioning workflow (validated with dummy credentials in the isolated VM)
 
 1. Install the Windows Service as `RustDeskAgent` using an explicitly selected
    account. Enable its service SID with `sc.exe sidtype RustDeskAgent unrestricted`
@@ -82,9 +82,8 @@ an elevated test runner and uses only random temporary paths and dummy credentia
 
 Windows x64 builds require the MSVC C++ tools and SDK (including the TLS dependency).
 PR #3 passed hosted Windows tests, including DPAPI round-trip and protected-store
-creation/load checks. Access under the configured service SID, denial to an ordinary user and another service,
-reboot persistence and prompt-free behavior require Windows execution. These
-runtime checks are tracked in the [isolated VM record](windows-vm-validation.md).
+creation/load checks. Subsequent runtime checks are recorded in the
+[isolated VM record](validation/2026-11-08-service-lifecycle.md).
 Service-SID access, unrelated-service denial and unattended reboot passed there;
 ordinary-user token access denial and CLI initialization rejection also passed. Do not deploy on compile evidence.
 
