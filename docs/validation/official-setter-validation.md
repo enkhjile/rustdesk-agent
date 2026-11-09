@@ -65,10 +65,10 @@ Local evidence is retained under ignored `target/validation/`:
 `settings-agent-v1-*.txt`, and `agent-setters-v1-final-state.txt`.
 
 An earlier direct-official-CLI run also passed both accounts and persistence.
-Its idle GUI wait lost the remote session, so cleanup failed; a separate recovery
+Its cleanup failed after the remote session was lost; a separate recovery
 restored both raw values and shut down the VM at 11:41:13. At 11:40 the locked GUI
 showed click approval. Verification-method controls were hidden in that mode and
-were **not** visually verified. The agent run above removed that idle GUI wait.
+were **not** visually verified. The agent run above used a fresh session for cleanup.
 
 ## Automated checks and remaining gates
 
