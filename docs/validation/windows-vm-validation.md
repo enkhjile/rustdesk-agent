@@ -1,5 +1,9 @@
 # Isolated Windows VM validation — 2026-11-08
 
+> Historical validation record: results and pending checks describe the tested
+> revision and date, not current project status. See the [current plan](../plan.md)
+> and [validation index](README.md) for subsequent results.
+
 This record follows the [host-only attempt](windows-validation-2026-11-08.md).
 It tests the read-only executable built from `0534dcab782307bddf86f41a51937577c9ea3124`
 on PR #5. No agent code or RustDesk settings were changed.
@@ -133,7 +137,7 @@ cmd.exe /c 'C:\Lab\rustdesk-agent.exe --init-state > C:\Lab\Results\repeat-init.
 ```
 
 The ordinary-user `--init-state` CLI check passed at `19:40:57+09:00` using
-[the retained manual harness](../tests/manual/user-init.ps1). It runs a temporary
+[the retained manual harness](../../tests/manual/user-init.ps1). It runs a temporary
 SCM helper as `RDAGENT-LAB\LabUser`, which starts the actual agent executable with
 `--init-state` and redirected stdout/stderr. The recorded token included Users
 and Service, with `administrator=False`, and no agent service SID. Results:

@@ -1,10 +1,10 @@
-# Windows service skeleton and read-only detection
+# Windows service and local CLI commands
 
 This development slice targets Windows x64. It is not ready for kiosk deployment.
 It implements SCM start/stop/shutdown, read-only HTTPS polling when enrolled, and
 local diagnostic snapshots. The service does not apply settings; an explicit local
 one-shot setter is described below. [Durable state and status delivery](state.md) require administrator initialization before starting an enrolled service. Local [enrollment and credential
-storage](enrollment.md) are implemented but require Windows runtime validation.
+storage](enrollment.md) passed the isolated VM access and lifecycle checks.
 No service is installed automatically and no elevation is requested by the agent.
 
 ## Run a one-shot probe
@@ -69,15 +69,17 @@ its `unverified_cli_value`/`ambiguous_default`/failure status and
 means acceptance plus matching CLI readback, not verified connection behavior.
 A readback mismatch prints the report and exits nonzero. This command is not
 connected to polling or reconciliation; management still reports `unsupported`
-with null applied revision. See [isolated setter validation](official-setter-validation.md).
+with null applied revision. See [isolated setter validation](validation/official-setter-validation.md).
 
 A separate direct IPC reader is not a supported workaround for 1.4.7: the
 [Windows main IPC authorization](https://github.com/rustdesk/rustdesk/blob/1.4.7/src/ipc/auth.rs#L660)
 requires the peer executable to match RustDesk, while the
 [CLI options reader](https://github.com/rustdesk/rustdesk/blob/1.4.7/src/ipc.rs#L1721)
-hides connection failures behind cache fallback. Reliable live reads require an
-upstream read interface that exposes failure/provenance; the agent does not
-impersonate RustDesk, inject code or treat cache/TOML values as live settings.
+hides connection failures behind cache fallback. Independent live-read provenance
+remains unresolved. This does not block the tested official CLI setters or require
+a custom client; the upstream proposal #11 was closed as superseded by #12.
+The agent does not impersonate RustDesk, inject code or treat cache/TOML values
+as live settings.
 
 ## Service entry point
 
@@ -92,7 +94,7 @@ The report path must be absolute and end in `.json`. Provision its directory fir
 account to write while excluding untrusted writers; protect the executable and
 SCM configuration too. The skeleton does not set or verify these ACLs. Installation
 is an administrator action, outside this implementation; installation was tested
-only in the [isolated VM](windows-vm-validation.md). Do not rely on an installer/SCM default that silently selects
+only in the [isolated VM](validation/windows-vm-validation.md). Do not rely on an installer/SCM default that silently selects
 LocalSystem. The service account remains an explicit deployment decision.
 
 The service probes and (when enrolled) polls immediately, then waits 60 seconds
@@ -140,43 +142,34 @@ counters. If both fail, the cycle uses the larger delay. Storage failures stop t
 outages, errors or unassignment; this service never writes settings at all.
 To stop polling, stop the agent service. Do not delete enrollment as a toggle.
 
-RustDesk 1.4.7's `--option` path requires installation and administrative privilege.
-A LocalService probe is therefore expected to report invalid output for option
-reads. An elevated administrator passes the source-level privilege check;
-LocalSystem specifically is not required by that check. The isolated VM demonstrated prompt-free LocalService polling with RustDesk absent.
-The [installed 1.4.7 run](rustdesk-1.4.7-validation.md) observed blank ID/options
-under both LocalService and an elevated administrator, with RustDesk running or
-stopped. The agent rejected those values as invalid output. Successful live
-settings reads remain unverified.
+## Validation status
 
-## Validation still required on disposable Windows
+The [isolated VM service run](validation/windows-vm-validation.md) passed
+service-SID access, ordinary-user/unrelated-service denial, administrator
+initialization, HTTP cancellation/retries and unattended reboot as LocalService.
+The [installed-client run](validation/rustdesk-1.4.7-validation.md) additionally
+verified cancellation of a stalled real CLI child.
 
-The [2026-11-08 validation record](windows-validation-2026-11-08.md) records local
-Windows build/test results and the non-elevated storage-test failures. The host
-reported physical Dell hardware; service installation and reboot testing were
-therefore deferred to an isolated disposable VM.
+Early blank option results under both accounts were not proof of a LocalService
+permission failure. The [getter/GUI diagnosis](validation/rustdesk-getter-diagnosis.md)
+showed that defaults can produce blank CLI output. The subsequent
+[actual agent setter run](validation/official-setter-validation.md) successfully
+changed both settings as administrator and LocalService, with matching reads from
+the other account and retained values after service restart and VM reboot.
+Original values were restored and the VM shut down. No guest UAC interaction
+was needed for those commands.
 
-The subsequent [isolated VM record](windows-vm-validation.md) records passing
-elevated Windows tests, SCM/HTTPS reporting, service-token access, cancellation,
-retries and guest reboot. Its pending section identifies the checks still outstanding.
+Remaining tests include the other two allowlisted mode values, independent GUI
+and connection verification, disabled/unavailable RustDesk, whole-map/concurrent
+changes and cancellation during a real setter. Deployment also needs binary and
+report-directory protection, report-write failure handling and the other gates in
+the [current plan](plan.md). The explicit setter does not enable automatic service
+application or claim verified live state.
 
-- Run `--detect` with RustDesk absent, installed 1.4.7, a different version and
-  the RustDesk service stopped. Compare reported ID/settings to the actual UI.
-- Install under an explicitly selected test account; start, stop during a probe,
-  restart and reboot. Verify SCM status and fresh timestamps, no orphan probe
-  processes, no UAC prompts, and the expected privilege-related failures.
-- Deny report-file access and confirm a nonzero stopped status. Check non-admin
-  users cannot replace the binaries or report directory contents.
-- Record Windows version, RustDesk binary hash/signature, account and results.
-  Read-only success does not authorize enabling writes; IPC fallback and whole-map
-  writes still require separate fault tests before a write adapter can ship.
-
-Local verification: portable parser/process and HTTPS polling tests. The polling
-slice adds a TLS dependency that requires Windows C headers, so the macOS
-cross-target check cannot complete without the Windows SDK; use hosted Windows CI.
-Actual read-only service/UAC results are recorded in the isolated VM report;
-the installed 1.4.7 run additionally verified blank-output rejection and clean
-stop during a suspended real CLI child. Live settings readback remains pending.
+Use the [validation index](validation/README.md) for dated environments, hashes,
+commands and limitations. Historical reports retain their original observations;
+for example, early agents reported blank options as `invalid_output`, whereas the
+current detector reports `ambiguous_default`.
 
 Sources: [RustDesk 1.4.7 CLI](https://github.com/rustdesk/rustdesk/blob/1.4.7/src/core_main.rs),
 [IPC fallback/write behavior](https://github.com/rustdesk/rustdesk/blob/1.4.7/src/ipc.rs#L1664-L1697),

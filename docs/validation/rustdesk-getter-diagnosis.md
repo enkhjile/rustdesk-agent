@@ -1,5 +1,9 @@
 # RustDesk 1.4.7 getter diagnosis — 2026-11-08
 
+> Historical validation record: results and pending checks describe the tested
+> revision and date, not current project status. See the [current plan](../plan.md)
+> and [validation index](README.md) for subsequent results.
+
 Adding a disconnected network adapter resolved the blank ID in the isolated VM.
 It did not resolve the blank settings getters. Settings writes remain disabled;
 blank output is still unverified, not an observed default.

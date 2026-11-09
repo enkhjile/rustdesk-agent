@@ -1,5 +1,9 @@
 # Installed RustDesk 1.4.7 read-only validation — 2026-11-08
 
+> Historical validation record: results and pending checks describe the tested
+> revision and date, not current project status. See the [current plan](../plan.md)
+> and [validation index](README.md) for subsequent results.
+
 The agent correctly rejected blank getter output from the installed RustDesk
 binary. This run did **not** establish working live settings reads or authorize
 writes. No agent implementation failure was demonstrated.

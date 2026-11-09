@@ -1,5 +1,9 @@
 # Official CLI setter validation — 2026-11-09
 
+> Historical validation record: results and pending checks describe the tested
+> revision and date, not current project status. See the [current plan](../plan.md)
+> and [validation index](README.md) for subsequent results.
+
 The agent's explicit `--set-option` command works with official RustDesk 1.4.7
 under both an administrator and LocalService in the isolated VM. Automatic
 service writes remain disabled. Matching CLI readback is not independent proof
@@ -78,7 +82,9 @@ tests exercise real-child deadlines and output limits.
 sockets and two administrator-required storage tests. Outside the socket sandbox,
 `cargo test --locked -- --skip protected_store_is_create_once_and_keeps_identity
 --skip protected_state_replaces_reopens_and_excludes_other_writers` passed all 57
-remaining tests. The two administrator tests still require an elevated runner.
+remaining tests. Subsequently, [hosted Windows CI for commit 7f497af](https://github.com/enkhjile/rustdesk-agent/actions/runs/42553423154)
+passed all 59 tests, including both administrator-only storage tests, plus
+formatting, Clippy, build and dependency checks.
 
 Not covered: password-click and permanent-only mode runtime writes, independent
 live verification of verification-method, actual incoming connection behavior,

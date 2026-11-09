@@ -1,5 +1,9 @@
 # Windows validation attempt — 2026-11-08 (Asia/Tokyo)
 
+> Historical validation record: results and pending checks describe the tested
+> revision and date, not current project status. See the [current plan](../plan.md)
+> and [validation index](README.md) for subsequent results.
+
 Tested commit: `0534dcab782307bddf86f41a51937577c9ea3124`, branch
 `feat/durable-state-reporting` (PR #5). This is a build/test record, **not a
 completed Windows service canary**. No application code was changed.
@@ -77,7 +81,7 @@ binds `127.0.0.1:0`, generates an ephemeral certificate/key, and adds the certif
 explicitly to its test client. Assignments, fault injection and reports are held
 in memory; dropping the fixture stops it. The service executable cannot simply
 use that client or its ephemeral trust configuration. No standalone management
-server was deployed. See [contract testing](contract-testing.md).
+server was deployed. See [contract testing](../contract-testing.md).
 
 ## Remaining gates on an isolated disposable VM
 

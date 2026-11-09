@@ -1,6 +1,21 @@
 # RustDesk Windows agent — development slices
 
-This is an incomplete, non-deployable Windows x64 agent. It contains a strict desired-state parser, a durable management revision guard, a read-only RustDesk detector and a Windows Service skeleton. An enrolled service now polls desired state over HTTPS and records acceptance/errors in local diagnostic snapshots; it sends durable read-only status reports but never applies settings. Enrolled installations require explicit [state initialization](docs/state.md) before service startup. Local [enrollment and credential storage](docs/enrollment.md) use machine-scoped DPAPI plus restrictive ACLs. PR #3 passed Windows DPAPI/storage tests; actual service-account access, reboot and UAC validation remain pending. Server registration and the write adapter remain unimplemented. See [Windows usage and limits](docs/windows-service.md), [plan](docs/plan.md), and [contract fixture](docs/contract-testing.md).
+Windows x64 companion agent in development. The service polls desired state over
+HTTPS and delivers durable status reports, but does not apply settings automatically.
+An explicit local `--set-option` command supports two allowlisted settings using
+official RustDesk 1.4.7. Matching CLI readback is separate from live verification.
+No custom client, direct TOML editing or password provisioning.
+
+[Enrollment](docs/enrollment.md) uses machine-scoped DPAPI and service-SID ACLs.
+Enrolled services require administrator [state initialization](docs/state.md).
+Isolated VM tests passed service access isolation, ordinary-user denial, HTTP
+retries/cancellation and unattended reboot. Explicit setters passed under
+administrator and LocalService accounts, including restart/reboot persistence.
+See the [dated validation records](docs/validation/README.md) for exact scope.
+
+Production backend/server registration, automatic settings application and
+deployment packaging remain unfinished. Start with [Windows usage](docs/windows-service.md),
+the [current plan](docs/plan.md), and the [contract fixture](docs/contract-testing.md).
 
 ## Repository layout
 
@@ -10,12 +25,14 @@ Cargo.lock          Locked dependencies; keep this tracked
 src/lib.rs          Desired-state parsing, reconciliation and backoff
 src/detection.rs    Read-only query allowlist and output parsing
 src/probe.rs        Bounded CLI process runner
+src/setter.rs       Explicit allowlisted local settings command
 src/windows/       Windows SCM lifecycle and protected enrollment storage
 src/management.rs   Authenticated polling and durable status delivery
 src/state.rs        Validated revision/sequence/outbox snapshot
 src/enrollment.rs   Validated device identity, origin and credential record
 tests/reconcile.rs  Tests using an in-memory settings adapter
-docs/plan.md        Design, evidence, milestones and validation gates
+docs/plan.md        Current capabilities and remaining validation gates
+docs/validation/   Dated test evidence, not current operating instructions
 docs/contract.md    Management endpoint contract (test backend only)
 tests/contract_backend.rs  HTTPS contract tests
 tests/support/     In-memory Rust test backend
@@ -51,7 +68,8 @@ cargo check --locked --target x86_64-pc-windows-msvc
 Add `--offline` to Cargo commands when dependencies are cached. The TLS dependency also needs Windows C headers; installing the Rust target alone
 is insufficient for cross-checking from macOS. A cross-target
 check does not run Windows tests or establish service/UAC behavior. The core can
-be tested on the development host; the eventual agent targets Windows x64 only.
+be tested on the development host; the agent executable targets Windows x64 only.
+Two protected-storage tests require an elevated Windows test runner.
 
 The public repository is [enkhjile/rustdesk-agent](https://github.com/enkhjile/rustdesk-agent).
 Use short-lived branches targeting `alpha`; promote validated changes to `main`.
@@ -160,7 +178,8 @@ When connecting GitHub:
    release job in the workflow.
 
 Existing released versions must never be retagged; release a new fix instead.
-GitHub release permissions and protected-branch rules still need hosted validation.
+Automatic alpha prerelease publication has succeeded. That does not establish
+installer readiness or verify every protected-branch policy.
 
 
 References: [committed](https://github.com/crate-ci/committed),

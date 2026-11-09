@@ -1,7 +1,7 @@
 # Durable management state and status delivery
 
 The service now keeps the accepted desired state, observation sequence and latest
-pending status in one protected snapshot. RustDesk writes remain disabled. Every
+pending status in one protected snapshot. Automatic service writes remain disabled. Every
 requested setting is reported as `unsupported`, with `applied_revision: null`;
 this means live verification/application is not enabled, even if a CLI getter
 appears to match. Detected RustDesk ID/version are reported when available.
@@ -23,7 +23,7 @@ UUID/origin and exclusively creates the Windows Known Folder ProgramData directo
 not prompt for elevation, generate identity, change credentials, contact a server,
 or install/start the service. A partial initialization requires investigation;
 rerunning cannot overwrite it. Administrator initialization and service persistence
-were exercised only in the [isolated VM](windows-vm-validation.md); this is not
+were exercised only in the [isolated VM](validation/windows-vm-validation.md); this is not
 deployment approval.
 
 The snapshot is bound to both enrolled UUID and management origin. Missing,
@@ -95,8 +95,9 @@ credential operation. No such operation is implemented or performed here.
 
 Stopping or downgrading the binary does not alter RustDesk settings. Preserve the
 state directory when rolling back. The earlier polling-only binary ignores it;
-returning to this version reloads it. Enabling writes remains blocked on the
-separate Windows CLI/service canary.
+returning to this version reloads it. Enabling automatic service writes remains blocked on the
+remaining live-verification and end-to-end gates in the [current plan](plan.md).
+The explicit local setter does not update management revisions or status.
 
 References: [MoveFileExW](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefileexw),
 [Windows file security](https://learn.microsoft.com/en-us/windows/win32/fileio/file-security-and-access-rights).
