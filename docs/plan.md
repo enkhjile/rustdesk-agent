@@ -77,8 +77,11 @@ that limitation is not evidence that setters need a custom client.
    rotation without resetting identity or history. Their isolated
    [recovery test](validation/credential-rotation.md) passed, including ordinary-user
    CLI replacement rejection. Enrollment UI remains unfinished.
-   Define heartbeat/error reporting without a desired revision. Validate installer
-   permissions, executable provenance/signing, report-directory protection,
+   An administrator-run [installer](installer.md) now implements retained-data
+   install/upgrade/uninstall; [isolated runtime checks](validation/windows-installer.md)
+   passed, including running upgrades and reporting after reinstall. Define
+   heartbeat/error reporting without a desired revision. Complete executable
+   provenance/signing and validate
    report-write failure handling and physical power-loss durability. Select a
    distribution license and include dependency notices before executable release.
 4. **Authorize a rollout separately.** Maintain out-of-band access and test a

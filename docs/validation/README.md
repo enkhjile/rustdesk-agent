@@ -37,3 +37,6 @@ The [credential rotation test](credential-rotation.md) passed administrator
 replacement, interrupted handoff, restart and revocation recovery, plus
 ordinary-user CLI replacement rejection without changing protected files.
 These records do not authorize production deployment or automatic service writes.
+
+The [Windows installer record](windows-installer.md) covers install, stopped and
+running upgrades, retained enrollment/state, uninstall and reporting after reinstall.

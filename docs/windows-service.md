@@ -160,12 +160,12 @@ administrator-controlled absolute paths; quote all paths):
 "C:\Program Files\RustDeskAgent\rustdesk-agent.exe" --service "C:\Program Files\RustDesk\rustdesk.exe" "C:\ProgramData\RustDeskAgent\detection.json"
 ```
 
-The report path must be absolute and end in `.json`. Provision its directory first. Its ACL must permit the chosen service
-account to write while excluding untrusted writers; protect the executable and
-SCM configuration too. The skeleton does not set or verify these ACLs. Installation
-is an administrator action, outside this implementation; installation was tested
-only in the [isolated VM](validation/2026-11-08-service-lifecycle.md). Do not rely on an installer/SCM default that silently selects
-LocalSystem. The service account remains an explicit deployment decision.
+The report path must be absolute and end in `.json`. The administrator-run
+[installer](installer.md) provisions the executable and report directories with
+protected ACLs and explicitly selects LocalService with the agent service SID.
+It leaves a new service stopped for enrollment and state initialization, and keeps
+automatic writes disabled. For manual service setup, provision these protections
+yourself; the service does not repair directory permissions.
 
 The service probes and (when enrolled) polls immediately, then waits 60 seconds
 after a successful cycle. Poll failures use the bounded retry delay described below.

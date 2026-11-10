@@ -19,7 +19,9 @@ See the [dated validation records](docs/validation/README.md) for exact scope.
 
 The [Console fork](https://github.com/enkhjile/rustdesk-console) provides server
 registration and read-only integration. Production deployment, automatic settings
-application and deployment packaging remain unfinished. Start with [Windows usage](docs/windows-service.md),
+application and signed distribution remain unfinished. An administrator-run
+[Windows installer](docs/installer.md) supports install, upgrade and uninstall
+while retaining enrollment and state. Start with [Windows usage](docs/windows-service.md),
 the [current plan](docs/plan.md), and the [contract fixture](docs/contract-testing.md).
 
 ## Repository layout
