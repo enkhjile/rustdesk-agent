@@ -14,6 +14,7 @@
     "observation_sequence"
   ],
   "properties": {
+    "management_mode": {"enum": ["observe_only", "managed"]},
     "schema_version": {
       "const": 1
     },

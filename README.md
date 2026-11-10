@@ -1,11 +1,10 @@
 # RustDesk Windows agent — development slices
 
 Windows x64 companion agent in development. The service polls desired state over
-HTTPS and delivers durable status reports; default builds cannot apply settings automatically.
-An experimental [lab application mode](docs/windows-service.md#experimental-managed-application)
-requires a build feature, local startup flag and loopback HTTPS endpoint.
-An explicit local `--set-option` command supports two allowlisted settings using
-official RustDesk 1.4.7. Matching CLI readback is separate from live verification.
+HTTPS and applies Console policies for two allowlisted settings using official
+RustDesk 1.4.7: approval mode and password verification method. New installations
+use managed mode; upgrades preserve the existing mode, including observe-only.
+Matching CLI readback is reported separately from live verification.
 No custom client, direct TOML editing or password provisioning.
 
 [Enrollment](docs/enrollment.md) uses machine-scoped DPAPI and service-SID ACLs.
@@ -15,11 +14,11 @@ see the [rotation procedure](docs/enrollment.md#credential-rotation-and-recovery
 Isolated VM tests passed service access isolation, ordinary-user denial, HTTP
 retries/cancellation and unattended reboot. Explicit setters passed under
 administrator and LocalService accounts, including restart/reboot persistence.
-See the [dated validation records](docs/validation/README.md) for exact scope.
+See the [validation records](docs/validation/README.md) for exact scope.
 
 The [Console fork](https://github.com/enkhjile/rustdesk-console) provides server
-registration and read-only integration. Production deployment, automatic settings
-application and signed distribution remain unfinished. An administrator-run
+registration, policy assignment and management status. Production deployment
+and signed distribution remain unfinished. An administrator-run
 [Windows installer](docs/installer.md) supports install, upgrade and uninstall
 while retaining enrollment and state. Start with [Windows usage](docs/windows-service.md),
 the [current plan](docs/plan.md), and the [contract fixture](docs/contract-testing.md).
@@ -62,7 +61,6 @@ tools and Windows SDK. From this directory:
 cargo fmt --check
 cargo clippy --locked --all-targets --all-features -- -D warnings
 cargo test --locked
-cargo test --locked --features lab-apply
 cargo build --locked
 ```
 

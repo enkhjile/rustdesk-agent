@@ -1,11 +1,11 @@
 # Windows service and local CLI commands
 
-This development slice targets Windows x64. It is not ready for kiosk deployment.
-It implements SCM start/stop/shutdown, read-only HTTPS polling by default, and
-local diagnostic snapshots. Default builds do not apply settings; an explicit local
-one-shot setter is described below. [Durable state and status delivery](state.md) require administrator initialization before starting an enrolled service. Local [enrollment and credential
-storage](enrollment.md) passed the isolated VM access and lifecycle checks.
-No service is installed automatically and no elevation is requested by the agent.
+The Windows x64 service implements SCM start/stop/shutdown, authenticated HTTPS
+polling and local diagnostic snapshots. Append `--manage` to the service command
+to apply assigned settings; omitting it keeps observe-only mode. The installer
+selects managed mode for new installations and preserves the mode on upgrade.
+Enrollment and administrator [state initialization](state.md) remain required.
+The agent does not request elevation or install itself.
 
 ## Run a one-shot probe
 
@@ -36,20 +36,19 @@ live state was verified. Settings use `unverified_cli_value` with the allowliste
 value when nonblank, or `ambiguous_default` without a value when blank. Empty
 version/ID output remains `invalid_output`. No default value is inferred from
 blank option output. `live_state_verified` is always false. These local diagnostic
-statuses do not change management reports: results remain `unsupported` and
-applied revision remains null. RustDesk can fall back to cached
+statuses are diagnostic evidence; observe-only reports use `unsupported`.
+Applied revision remains null in either service mode. RustDesk can fall back to cached
 configuration during IPC failures; even its getter commands can update local
 caches internally. The detector issues no modifying CLI commands. The agent never
 edits RustDesk TOML or provisions permanent passwords.
 
-## Experimental managed application
+## Managed application
 
-For isolated lab validation only, build with `cargo build --locked --features lab-apply`
-and append `--lab-apply` to the existing `--service <RustDesk.exe> <report.json>`
-arguments. Both gates are required; default builds reject the flag. Enrollment,
-TLS validation, service-SID access and durable state requirements remain in force.
-Application accepts only loopback IP origins or `localhost`, pinned to `127.0.0.1`.
-Other management origins are rejected before management requests or application.
+Normal builds include managed application. Append `--manage` to
+`--service <RustDesk.exe> <report.json>` to enable it. The enrolled HTTPS origin
+may be a remote Console host. TLS validation, authentication, service-SID access
+and durable state requirements remain in force. Observe-only mode never invokes
+the setter. Upgrade Console first so it accepts management-mode report metadata.
 
 Each fresh, valid desired response is revision-checked and durably saved before
 settings I/O. The adapter checks official version 1.4.7, reads each requested
@@ -70,8 +69,9 @@ The local diagnostic detection snapshot precedes application in that cycle.
 The service and worker use nested process-lifetime jobs so stopping or killing
 the service cleans up its workers and their descendants. A canceled command may
 already have changed settings. There is no transactional application or rollback,
-and other writers do not participate in the agent lock. Production application
-remains disabled; this experiment does not satisfy the live-verification gate.
+and other writers do not participate in the agent lock. CLI readback is sufficient
+for the unverified outcome; independent live verification is not required to
+execute supported settings, and is not claimed.
 
 ## Explicit local setting command
 
@@ -163,15 +163,15 @@ administrator-controlled absolute paths; quote all paths):
 The report path must be absolute and end in `.json`. The administrator-run
 [installer](installer.md) provisions the executable and report directories with
 protected ACLs and explicitly selects LocalService with the agent service SID.
-It leaves a new service stopped for enrollment and state initialization, and keeps
-automatic writes disabled. For manual service setup, provision these protections
+It leaves a new service stopped for enrollment and state initialization. The
+example above is observe-only; append `--manage` for management. For manual setup, provision these protections
 yourself; the service does not repair directory permissions.
 
 The service probes and (when enrolled) polls immediately, then waits 60 seconds
 after a successful cycle. Poll failures use the bounded retry delay described below.
 STOP or SHUTDOWN interrupts the wait, HTTP request or active probe; cancellation requests
-termination of the direct CLI child. Descendant processes are not managed by
-a Windows Job Object in this skeleton. Snapshot-file writes are synchronous
+termination of the CLI child. Managed workers and their descendants are contained
+in Windows process-lifetime jobs. Snapshot-file writes are synchronous
 and must finish before a pending stop can be handled; use a local report directory. SCM receives pending/running/stopped status.
 Fatal runtime/report-write errors or an invalid existing enrollment store stop
 the service with service-specific code 1. Missing enrollment keeps read-only
@@ -182,7 +182,7 @@ Detection failures are recorded and retried on the next cycle. The JSON file
 contains a timestamp and detection results; it is overwritten, not an audit log
 or atomic durable revision store. Readers may need to retry during replacement.
 
-## Read-only management polling
+## Management polling
 
 Valid enrollment enables `GET /v1/agent/desired` at the locally provisioned HTTPS
 origin. The client uses the per-device bearer credential, validates certificates
@@ -197,7 +197,8 @@ and persisted revision guard. A 204 means unassigned, retaining the watermark
 and queueing a durable heartbeat with no setting outcomes. Heartbeats use the
 same delivery retries and normal polling interval; they do not prove live health.
 Invalid, stale and conflicting state is rejected. Acceptance does not verify or
-apply any RustDesk setting. There is no settings adapter in the polling path.
+apply any RustDesk setting by itself. Managed mode invokes the bounded adapter
+after durable acceptance; observe-only mode never invokes it.
 
 Snapshots include `management.delivery` for status delivery and `management.status` (with a `kind` discriminator), the highest
 `accepted_revision`, and `next_poll_seconds`. HTTP failures include only their
@@ -211,7 +212,7 @@ start after detection and polling finish; they are not a fixed wall-clock cadenc
 The watermark and latest pending report now survive restart; see [state initialization,
 permissions and recovery](state.md). Poll and delivery failures have separate retry
 counters. If both fail, the cycle uses the larger delay. Storage failures stop the service. No cached state is applied during
-outages, errors or unassignment; this service never writes settings at all.
+outages, errors or unassignment. Observe-only mode never writes settings.
 To stop polling, stop the agent service. Do not delete enrollment as a toggle.
 
 ## Validation status

@@ -228,7 +228,7 @@ pub mod credentials;
 
 pub mod management;
 
-#[cfg(all(windows, feature = "lab-apply"))]
+#[cfg(windows)]
 pub mod managed;
 
 pub mod state;

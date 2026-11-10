@@ -36,6 +36,66 @@ fn desired(revision: u64, mode: &str) -> String {
 }
 
 #[tokio::test]
+async fn managed_https_origin_reports_mode_and_preserves_it_on_retry() {
+    let fixture = support::Fixture::start().await;
+    let origin = fixture.url.replace("127.0.0.1", "console.test");
+    let enrolled = enrollment(&origin);
+    let store = crate::state::tests::MemoryStore::new(&enrolled.info());
+    let address = fixture.url.trim_start_matches("https://").parse().unwrap();
+    let mut client = Poller::new(enrolled, store.clone()).unwrap();
+    client.client = client_builder()
+        .resolve("console.test", address)
+        .add_root_certificate(fixture.certificate.clone())
+        .build()
+        .unwrap();
+    fixture
+        .assign(
+            support::A,
+            serde_json::from_str(&desired(1, "click")).unwrap(),
+        )
+        .unwrap();
+    fixture.status_response(Some(StatusCode::SERVICE_UNAVAILABLE));
+    let mut calls = 0;
+    let result = client
+        .poll_applying(None, None, |_, _| {
+            calls += 1;
+            std::future::ready(crate::state::SettingResult::UnverifiedCliMatch)
+        })
+        .await;
+    assert_eq!(result.status, PollStatus::Accepted { revision: 1 });
+    assert_eq!(calls, 1);
+    let pending = client.state.pending.clone().unwrap();
+    assert_eq!(
+        serde_json::to_value(&pending).unwrap()["management_mode"],
+        "managed"
+    );
+    drop(client);
+    let mut client = Poller::new(enrollment(&origin), store).unwrap();
+    client.client = client_builder()
+        .resolve("console.test", address)
+        .add_root_certificate(fixture.certificate.clone())
+        .build()
+        .unwrap();
+    fixture.status_response(None);
+    respond(&fixture, 503, "");
+    // Changing local mode cannot rewrite a previous report during recovery.
+    assert_eq!(
+        client.poll(None, None).await.delivery,
+        Some(PollStatus::Delivered)
+    );
+    assert_eq!(
+        fixture.latest(support::A).unwrap(),
+        serde_json::to_value(pending).unwrap()
+    );
+    respond(&fixture, 200, &desired(1, "click"));
+    client.poll(None, None).await;
+    assert_eq!(
+        fixture.latest(support::A).unwrap()["management_mode"],
+        "observe_only"
+    );
+}
+
+#[tokio::test]
 async fn unassigned_heartbeat_is_durable_and_retried_after_restart() {
     let fixture = support::Fixture::start().await;
     let store = crate::state::tests::MemoryStore::new(&enrollment(&fixture.url).info());
@@ -50,6 +110,7 @@ async fn unassigned_heartbeat_is_durable_and_retried_after_restart() {
     assert_eq!(body["results"], json!({}));
     assert_eq!(body["observation_sequence"], 1);
     assert_eq!(body["applied_revision"], json!(null));
+    assert_eq!(body["management_mode"], "observe_only");
     drop(client);
     let mut client = restored_poller(&fixture, store);
     assert_eq!(client.state.pending, Some(pending));
@@ -531,20 +592,6 @@ async fn managed_rejects_unsafe_inputs_and_reobserves_equal_and_higher_revisions
             })
             .await;
     }
-    assert_eq!(calls, 3);
-    poller.enrollment = enrollment("https://example.test");
-    assert_eq!(
-        poller
-            .poll_applying(None, None, |_, _| {
-                calls += 1;
-                std::future::ready(SettingResult::WriteFailed)
-            })
-            .await
-            .status,
-        PollStatus::Rejected {
-            reason: "lab_requires_loopback_origin"
-        }
-    );
     assert_eq!(calls, 3);
 }
 

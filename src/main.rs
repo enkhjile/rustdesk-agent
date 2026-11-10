@@ -79,7 +79,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Err("Settings command accepted, but CLI readback did not match".into());
         }
         Ok(())
-    } else if (args.len() == 3 || (args.len() == 4 && args[3] == "--lab-apply"))
+    } else if (args.len() == 3 || (args.len() == 4 && args[3] == "--manage"))
         && args[0] == "--service"
     {
         service::dispatch(
@@ -88,7 +88,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             args.len() == 4,
         )
     } else {
-        Err("Usage: rustdesk-agent --enroll <https-origin> (credential on stdin) | --replace-credential (credential on stdin) | --init-state | --enrollment-info | --detect <absolute RustDesk.exe path> | --set-option <absolute RustDesk.exe path> <setting> <value> | --service <absolute RustDesk.exe path> <absolute report.json path>".into())
+        Err("Usage: rustdesk-agent --enroll <https-origin> (credential on stdin) | --replace-credential (credential on stdin) | --init-state | --enrollment-info | --detect <absolute RustDesk.exe path> | --set-option <absolute RustDesk.exe path> <setting> <value> | --service <absolute RustDesk.exe path> <absolute report.json path> [--manage]".into())
     }
 }
 

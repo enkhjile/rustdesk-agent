@@ -31,8 +31,6 @@ jobs:
       - name: Test
         run: |
           cargo test --locked
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo test --locked --features lab-apply
       - name: Build
         run: cargo build --locked --release --target x86_64-pc-windows-msvc --no-default-features
       - name: Installer lifecycle

@@ -32,7 +32,7 @@ The installer uses fixed Windows Known Folder locations:
 | --- | --- |
 | Program Files\RustDeskAgent\rustdesk-agent.exe | Administrator-owned directory; SYSTEM/Administrators full control, agent service SID read/execute. |
 | ProgramData\RustDeskAgent\detection.json | Protected report directory; SYSTEM/Administrators full control, agent service SID modify. OWNER RIGHTS prevents implicit permission-changing access through file ownership. |
-| RustDeskAgent service | LocalService account, unrestricted service SID, automatic start, quoted executable/report paths, no `--lab-apply` flag. |
+| RustDeskAgent service | LocalService account, unrestricted service SID, automatic start, quoted executable/report paths, `--manage` on new installations. |
 
 The new service is left **stopped**. Follow [enrollment](enrollment.md): run the
 installed executable's `--enroll` with a device credential on redirected stdin,
@@ -58,7 +58,10 @@ Supply the same `-RustDeskPath` used during installation if it differs from the
 default. The service path, account and SID must match. A protected staged copy is
 hash-checked before stopping the service. The executable is replaced atomically
 on the same volume. A previously running service is restarted; a stopped service
-stays stopped. Automatic writes remain disabled even for a lab-capable binary.
+stays stopped. Omit `-Mode` to preserve the existing mode, including legacy
+observe-only services. Use `-Mode Managed` or `-Mode ObserveOnly` on Upgrade to
+change it explicitly. Install defaults to Managed; `-Mode ObserveOnly` installs
+a reporting-only service. Managed mode applies assigned policies after startup.
 
 Enrollment and durable-state directories are never opened, recreated, reset or
 deleted by setup. Their UUID, credential, revision, sequence and pending report

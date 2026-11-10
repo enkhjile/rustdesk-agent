@@ -1,4 +1,4 @@
-//! Experimental lab adapter. Reuses the locked, job-contained CLI worker.
+//! Managed settings adapter. Reuses the locked, job-contained CLI worker.
 use crate::{
     Setting,
     detection::{Observation, Query},

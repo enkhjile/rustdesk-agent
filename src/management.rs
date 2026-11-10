@@ -3,7 +3,7 @@ use crate::{
     Setting, backoff_seconds,
     enrollment::Enrollment,
     parse_desired,
-    state::{DurableState, SettingResult, StateStore},
+    state::{DurableState, ManagementMode, SettingResult, StateStore},
 };
 use reqwest::{Client, ClientBuilder, header};
 use serde::Serialize;
@@ -93,9 +93,8 @@ impl Poller {
         .await
     }
 
-    /// Lab-only application, requiring a fresh authenticated desired response.
+    /// Managed application, requiring a fresh authenticated desired response.
     /// The callback must be cancellation-safe. No callback can claim `verified`.
-    #[cfg(any(feature = "lab-apply", test))]
     pub async fn poll_applying<F, Fut>(
         &mut self,
         id: Option<String>,
@@ -106,20 +105,6 @@ impl Poller {
         F: FnMut(Setting, &'static str) -> Fut,
         Fut: std::future::Future<Output = SettingResult>,
     {
-        if self.enrollment.info().management_origin.host_str() != Some("localhost")
-            && !matches!(self.enrollment.info().management_origin.host(),
-            Some(url::Host::Ipv4(ip)) if ip.is_loopback())
-            && !matches!(self.enrollment.info().management_origin.host(), Some(url::Host::Ipv6(ip)) if ip.is_loopback())
-        {
-            return PollObservation {
-                status: PollStatus::Rejected {
-                    reason: "lab_requires_loopback_origin",
-                },
-                delivery: None,
-                accepted_revision: self.state.accepted.as_ref().map(|s| s.revision),
-                next_poll_seconds: 300,
-            };
-        }
         self.poll_with(id, version, Some(apply)).await
     }
 
@@ -275,6 +260,11 @@ impl Poller {
         Fut: std::future::Future<Output = SettingResult>,
     {
         // Only this locally provisioned origin can receive the credential.
+        let mode = Some(if apply.is_some() {
+            ManagementMode::Managed
+        } else {
+            ManagementMode::ObserveOnly
+        });
         let mut endpoint = self.enrollment.info().management_origin;
         endpoint.set_path("/v1/agent/desired");
         let token = Zeroizing::new(format!("Bearer {}", self.enrollment.credential()));
@@ -308,6 +298,7 @@ impl Poller {
             if let Err(reason) = next.heartbeat(id, version) {
                 return (PollStatus::Rejected { reason }, None);
             }
+            next.pending.as_mut().unwrap().management_mode = mode;
             if self.commit(next).is_err() {
                 return (PollStatus::StorageError, None);
             }
@@ -377,6 +368,7 @@ impl Poller {
         let result = parse_desired(&body).and_then(|state| {
             let mut next = self.state.clone();
             next.observe(&state, id, version)?;
+            next.pending.as_mut().unwrap().management_mode = mode;
             if apply.is_some() {
                 for (key, _) in state.pairs() {
                     next.pending

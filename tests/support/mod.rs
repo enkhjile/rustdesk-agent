@@ -34,6 +34,8 @@ struct Status {
     applied_revision: Option<u64>,
     observation_sequence: u64,
     results: Results,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    management_mode: Option<rustdesk_agent::state::ManagementMode>,
 }
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -151,9 +153,12 @@ pub struct Fixture {
 impl Fixture {
     pub async fn start() -> Self {
         let _ = rustls::crypto::ring::default_provider().install_default();
-        let certificate =
-            rcgen::generate_simple_self_signed(vec!["localhost".into(), "127.0.0.1".into()])
-                .unwrap();
+        let certificate = rcgen::generate_simple_self_signed(vec![
+            "localhost".into(),
+            "127.0.0.1".into(),
+            "console.test".into(),
+        ])
+        .unwrap();
         let der = certificate.cert.der().to_vec();
         let config =
             RustlsConfig::from_der(vec![der.clone()], certificate.signing_key.serialize_der())

@@ -1,18 +1,20 @@
 # Durable management state and status delivery
 
 The service now keeps the accepted desired state, observation sequence and latest
-pending status in one protected snapshot. Default builds keep automatic writes disabled. Every
-requested setting is then reported as `unsupported`, with `applied_revision: null`;
-this means live verification/application is not enabled, even if a CLI getter
-appears to match. Detected RustDesk ID/version are reported when available.
+pending status in one protected snapshot. Observe-only mode reports requested
+settings as `unsupported`. Managed mode records per-setting outcomes, including
+`unverified_cli_match`; both keep `applied_revision: null`.
+Detected RustDesk ID/version are reported when available.
 No credential is stored in the state file or included in a report.
 
-The opt-in [lab application mode](windows-service.md#experimental-managed-application)
+[Managed application](windows-service.md#managed-application)
 first saves acceptance, sequence and `indeterminate` results before any settings
 I/O, then saves each outcome. Cancellation can therefore leave an honest unknown
 outcome and a retained watermark. Storage failure stops further application and
 delivery. CLI matches remain unverified and never advance applied revision.
-Older binaries cannot decode pending reports containing the new result values:
+Reports optionally include `management_mode` (`managed` or `observe_only`). Old
+pending reports without it retain their exact retry body. Older binaries cannot
+decode pending reports containing new fields or result values:
 drain them with this version before downgrading, without resetting durable state.
 
 ## Initialization and upgrade

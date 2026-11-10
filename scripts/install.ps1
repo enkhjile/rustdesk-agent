@@ -5,6 +5,7 @@ param(
     [Parameter(Mandatory=$true)][ValidateSet('Install','Upgrade','Uninstall')][string]$Action,
     [string]$SourcePath,
     [string]$Sha256,
+    [ValidateSet('Managed','ObserveOnly')][string]$Mode,
     [string]$RustDeskPath = (Join-Path ([Environment]::GetFolderPath('ProgramFiles')) 'RustDesk\rustdesk.exe')
 )
 $ErrorActionPreference = 'Stop'
@@ -100,7 +101,7 @@ try {
     if ($Action -eq 'Install') {
         if ($service -or (Test-Path -LiteralPath $directory)) { throw 'Installation already exists; use Upgrade or investigate partial setup' }
     } else {
-        if (!$service -or $service.PathName -cne $command -or $service.StartName -ne 'NT AUTHORITY\LocalService' -or
+        if (!$service -or ($service.PathName -cne $command -and $service.PathName -cne "$command --manage") -or $service.StartName -ne 'NT AUTHORITY\LocalService' -or
             (Get-ItemProperty HKLM:\SYSTEM\CurrentControlSet\Services\RustDeskAgent).ServiceSidType -ne 1) {
             throw 'Service is not managed by this installer (path/account/SID mismatch)'
         }
@@ -125,6 +126,10 @@ try {
         Write-Output 'Service and executable removed. Enrollment, state and reports retained.'
         return
     }
+    if (!$Mode) {
+        $Mode = if ($Action -eq 'Install' -or $service.PathName -ceq "$command --manage") { 'Managed' } else { 'ObserveOnly' }
+    }
+    if ($Mode -eq 'Managed') { $command += ' --manage' }
     if (!$SourcePath -or $Sha256 -notmatch '^[0-9a-fA-F]{64}$') { throw 'SourcePath and trusted SHA-256 are required' }
     Assert-PlainPath $SourcePath
     if (!(Test-Path -LiteralPath $SourcePath -PathType Leaf) -or (Get-FileHash -LiteralPath $SourcePath -Algorithm SHA256).Hash -ne $Sha256) {
@@ -165,17 +170,21 @@ try {
         if ($result.ReturnValue -ne 0) { throw "Service creation failed: $($result.ReturnValue); files retained for inspection" }
         & $sc sidtype RustDeskAgent unrestricted | Out-Null
         if ($LASTEXITCODE -ne 0) { throw 'Service SID configuration failed; leave service stopped' }
-        Write-Output 'Installed, service stopped. Enroll and initialize state as administrator, bind UUID in Console, then Start-Service RustDeskAgent.'
+        Write-Output "Installed in $Mode mode, service stopped. Enroll and initialize state as administrator, bind UUID in Console, then Start-Service RustDeskAgent."
     } else {
         $wasRunning = $service.State -eq 'Running'
         Stop-Agent
         [IO.File]::Replace($stage,$executable,$backup)
+        if ($service.PathName -cne $command) {
+            $result = Invoke-CimMethod -InputObject $service -MethodName Change -Arguments @{PathName=$command}
+            if ($result.ReturnValue -ne 0) { throw "Service mode update failed: $($result.ReturnValue); service stopped and previous executable retained" }
+        }
         if ($wasRunning) {
             Start-Service RustDeskAgent
             Start-Sleep -Seconds 2
             if ((Get-Service RustDeskAgent).Status -ne 'Running') { throw 'Upgraded service stopped; previous executable retained for administrator recovery' }
         }
         [IO.File]::Delete($backup)
-        Write-Output 'Upgraded. Enrollment and state untouched; previous service running/stopped status restored.'
+        Write-Output "Upgraded in $Mode mode. Enrollment and state untouched; previous service running/stopped status restored."
     }
 } finally { $mutex.Dispose() }
