@@ -157,6 +157,24 @@ fn run(
             if management.as_ref().is_some_and(|value| matches!(value.status, rustdesk_agent::management::PollStatus::StorageError)) {
                 return Err("management state persistence failed".into());
             }
+            let password = if *manage {
+                match poller.as_mut() {
+                    Some(poller) => Some(tokio::select! {
+                        biased;
+                        _ = stop.changed() => break,
+                        result = poller.poll_password(|secret| async {
+                            let Ok(_lock) = crate::setter_lock::SettingsLock::acquire() else {
+                                return rustdesk_agent::password::Outcome::Indeterminate;
+                            };
+                            rustdesk_agent::probe::change_password(executable, secret).await
+                        }) => result,
+                    }),
+                    None => None,
+                }
+            } else { None };
+            if matches!(password, Some(rustdesk_agent::management::PollStatus::StorageError)) {
+                return Err("password state persistence failed".into());
+            }
             let delay = management
                 .as_ref()
                 .map_or(60, |value| value.next_poll_seconds);
@@ -165,6 +183,7 @@ fn run(
                 "detection": detection,
                 "enrollment": enrollment_info,
                 "management": management,
+                "password_operation": password,
             });
             // A diagnostic snapshot only, never revision state or an applied report.
             std::fs::write(report_path, serde_json::to_vec_pretty(&snapshot)?)?;

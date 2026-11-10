@@ -5,7 +5,9 @@ HTTPS and applies Console policies for two allowlisted settings using official
 RustDesk 1.4.7: approval mode and password verification method. New installations
 use managed mode; upgrades preserve the existing mode, including observe-only.
 Matching CLI readback is reported separately from live verification.
-No custom client, direct TOML editing or password provisioning.
+Managed services also accept separate [Console password-change operations](docs/password-management.md).
+No custom client or direct TOML editing. Password command acceptance is not live
+connection verification.
 
 [Enrollment](docs/enrollment.md) uses machine-scoped DPAPI and service-SID ACLs.
 Enrolled services require administrator [state initialization](docs/state.md).

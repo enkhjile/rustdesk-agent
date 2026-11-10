@@ -152,6 +152,9 @@ pub struct Fixture {
 }
 impl Fixture {
     pub async fn start() -> Self {
+        Self::start_with_routes(Router::new()).await
+    }
+    pub async fn start_with_routes(extra: Router) -> Self {
         let _ = rustls::crypto::ring::default_provider().install_default();
         let certificate = rcgen::generate_simple_self_signed(vec![
             "localhost".into(),
@@ -184,7 +187,8 @@ impl Fixture {
             .route("/v1/agent/desired", get(desired))
             .route("/v1/agent/status", post(status))
             .layer(DefaultBodyLimit::max(65536))
-            .with_state(backend.clone());
+            .with_state(backend.clone())
+            .merge(extra);
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let address = listener.local_addr().unwrap();
         let handle = axum_server::Handle::new();

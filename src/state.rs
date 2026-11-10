@@ -92,6 +92,12 @@ pub struct DurableState {
     sequence: u64,
     #[serde(deserialize_with = "required_nullable")]
     pub(crate) pending: Option<StatusReport>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::present_setting"
+    )]
+    pub(crate) password_attempt: Option<crate::password::Attempt>,
 }
 impl DurableState {
     pub fn initial(info: &EnrollmentInfo) -> Self {
@@ -102,6 +108,7 @@ impl DurableState {
             accepted: None,
             sequence: 0,
             pending: None,
+            password_attempt: None,
         }
     }
     pub fn decode(bytes: &[u8], info: &EnrollmentInfo) -> Result<Self, &'static str> {
@@ -114,6 +121,9 @@ impl DurableState {
             || state.management_origin != info.management_origin
         {
             return Err("state_enrollment_mismatch");
+        }
+        if let Some(attempt) = &state.password_attempt {
+            attempt.validate()?;
         }
         if let Some(accepted) = &state.accepted {
             RevisionGuard::default().accept(accepted)?;

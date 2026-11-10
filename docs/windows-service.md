@@ -40,7 +40,9 @@ statuses are diagnostic evidence; observe-only reports use `unsupported`.
 Applied revision remains null in either service mode. RustDesk can fall back to cached
 configuration during IPC failures; even its getter commands can update local
 caches internally. The detector issues no modifying CLI commands. The agent never
-edits RustDesk TOML or provisions permanent passwords.
+edits RustDesk TOML. Managed services can process separate, explicit
+[Console password-change operations](password-management.md); detection and
+observe-only polling never do so.
 
 ## Managed application
 
