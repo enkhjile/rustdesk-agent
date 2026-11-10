@@ -35,6 +35,15 @@ jobs:
           cargo test --locked --features lab-apply
       - name: Build
         run: cargo build --locked
+      - name: Installer lifecycle
+        shell: powershell
+        run: |
+          $fixture = Join-Path ([Environment]::GetFolderPath('ProgramFiles')) 'RustDeskInstallerFixture'
+          if (Test-Path $fixture) { throw 'Fixture path already exists' }
+          New-Item -ItemType Directory $fixture | Out-Null
+          Copy-Item target/debug/rustdesk-agent.exe "$fixture\rustdesk.exe"
+          # This placeholder is never executed: these CI service checks stay stopped.
+          ./tests/installer.ps1 -AgentPath (Resolve-Path target/debug/rustdesk-agent.exe).Path -RustDeskPath "$fixture\rustdesk.exe"
 
   dependencies:
     name: Dependency checks
