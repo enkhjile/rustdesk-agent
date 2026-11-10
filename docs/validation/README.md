@@ -42,4 +42,4 @@ The [Windows installer record](windows-installer.md) covers install, stopped and
 running upgrades, retained enrollment/state, uninstall and reporting after reinstall.
 
 The [heartbeat record](heartbeat.md) covers no-policy reports, durable retries,
-Console display and assignment transitions, with remaining checks identified.
+Console display, policy removal/reassignment and credential revocation.
