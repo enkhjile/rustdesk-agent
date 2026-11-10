@@ -6,8 +6,8 @@ script does not request elevation, download executables, enroll a device or chan
 RustDesk settings. Builds use a static C runtime; no app-local Visual C++ runtime
 DLLs are required by the agent.
 
-See the [validation record](validation/windows-installer.md) for completed checks
-and the remaining enrolled-service lifecycle gate.
+See the [validation record](validation/windows-installer.md) for completed
+enrolled-service lifecycle checks and their limits.
 
 Obtain the agent executable and its SHA-256 from a trusted build/distribution
 channel. A matching hash checks integrity, **not publisher identity**. Executable

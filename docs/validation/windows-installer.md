@@ -7,9 +7,9 @@
 - Official RustDesk 1.4.7. Installed agent service: LocalService with its
   service SID; automatic settings application remains disabled.
 - Rust 1.99.1, Windows x64 MSVC. Two debug artifacts built from the same source
-  are prepared for replacement testing; this does not establish cross-version
+  were used for replacement testing; this does not establish cross-version
   state-schema compatibility.
-- The prepared enrolled-service test uses dummy credentials and a guest-local
+- The enrolled-service test used dummy credentials and a guest-local
   HTTPS endpoint backed by the Console fork. No production endpoint is involved.
 
 ## Completed
@@ -29,12 +29,10 @@ the three protected-storage tests requiring administrator access. Those three
 passed in the VM. The installed agent build uses a static C runtime; import
 inspection found no dynamic Visual C++ runtime dependency.
 
-The first lifecycle run installed a stopped LocalService service and exercised
-validation refusals, but stopped after the unsafe-ACL test restored permissions.
-The installer compared DACL bookkeeping flags as well as permissions. The
-comparison now checks ACEs exactly and inheritance protection independently;
-the lifecycle test retains this regression case. Rejection tests also check the
-expected error, so an unrelated failure cannot count as successful refusal.
+The lifecycle test verifies exact ACEs and inheritance protection independently
+of DACL bookkeeping flags, including after permissions are restored. Rejection
+tests check the expected error, so unrelated failures cannot count as successful
+refusals.
 
 The VM checkpoint was restored, its temporary checkpoint removed, and the VM
 stopped with zero network adapters. No RustDesk settings were changed.
@@ -45,11 +43,9 @@ regression, stopped upgrade, uninstall/reinstall and all refusal cases. Both
 default and `lab-apply` Rust tests, formatting, Clippy, build and dependency checks
 passed. The installer did not start the service during these hosted checks.
 
-## Remaining runtime gate
+## Enrolled-service VM results
 
-The corrected lifecycle and enrolled-service scenarios still require a completed
-isolated VM run with official RustDesk. Hosted stopped-service checks do not
-establish running upgrade behavior or enrolled-state preservation:
+The lifecycle checks passed in the isolated VM with official RustDesk:
 
 ```powershell
 .\tests\installer.ps1 -AgentPath C:\Staging\rustdesk-agent.exe `
@@ -61,10 +57,46 @@ covers stopped install/upgrade/uninstall/reinstall and refusal of invalid hashes
 invalid payloads, weakened permissions and unexpected files. Hosted CI runs this
 test with a never-executed placeholder RustDesk executable.
 
-The separate enrolled-service VM scenario must confirm that stopped upgrades
-preserve enrollment/state bytes and ACLs; running upgrades resume reports with
-the same identity/revision and increasing sequence; uninstall retains stores;
-and reinstall resumes without reenrollment or state initialization. It must
-also compare RustDesk detection before/after and verify `unsupported` outcomes
-with null applied revision. Until that run passes, installer runtime validation
-is incomplete. Signing and production rollout remain separate gates.
+The enrolled-service scenario also passed:
+
+| Behavior | Observed result |
+| --- | --- |
+| Fresh install | LocalService, automatic start configuration, service SID enabled, service initially stopped; no automatic-write flag. |
+| Stopped upgrade | Executable hash changed to the second artifact; enrollment/state file hashes and ACLs stayed identical; service stayed stopped. |
+| Running upgrade | Service restarted and Console received a higher observation sequence with the same UUID and desired revision 1. |
+| Uninstall | Service and executable removed; enrollment/state file hashes and ACLs stayed identical. |
+| Reinstall | Existing stores reused without reenrollment or initialization; Console received sequence 4 under the same identity. |
+| Running uninstall | Service stopped and removal completed. |
+| Writes disabled | Both results remained `unsupported`, with null applied revision. RustDesk detection before/after was identical, including ambiguous-default settings observations; this is not live setting verification. |
+| Cleanup | Checkpoint restored and removed; VM off, zero network adapters. |
+
+The scenario used these installer operations, with dummy enrollment, Console
+binding and one administrator `--init-state` after the first install (hashes
+computed from the staged builds):
+
+```powershell
+$installer = 'C:\Lab\Installer\scripts\install.ps1'
+$old = 'C:\Lab\Installer\agent-old.exe'
+$new = 'C:\Lab\Installer\agent-new.exe'
+$oldHash = (Get-FileHash $old).Hash
+$newHash = (Get-FileHash $new).Hash
+& $installer -Action Install -SourcePath $old -Sha256 $oldHash
+# Enroll, bind, initialize, start, wait for report, then stop.
+& $installer -Action Upgrade -SourcePath $new -Sha256 $newHash
+Start-Service RustDeskAgent
+# Wait for a new report before exercising running replacement.
+& $installer -Action Upgrade -SourcePath $old -Sha256 $oldHash
+Stop-Service RustDeskAgent
+& $installer -Action Uninstall
+& $installer -Action Install -SourcePath $new -Sha256 $newHash
+Start-Service RustDeskAgent
+# Wait for sequence advancement before running uninstall.
+& $installer -Action Uninstall
+```
+
+## Limits
+
+Replacement used distinct artifacts of the same source, not different released
+versions or state schemas. No schema migration, power-loss recovery during
+installation, or installer rollback was tested. Signing, distribution licensing
+and production rollout remain separate gates. Automatic writes stay disabled.
