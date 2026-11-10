@@ -116,9 +116,11 @@ Reprovisioning with a new identity requires a separately authorized backend and
 credential operation. No such operation is implemented or performed here.
 
 Stopping or downgrading the binary does not alter RustDesk settings. Preserve the
-state directory when rolling back. The earlier polling-only binary ignores it;
-returning to this version reloads it. Enabling production service writes remains blocked on the
-remaining live-verification and end-to-end gates in the [current plan](plan.md).
+state directory when rolling back. Password operations add an optional
+`password_attempt` containing only ID, sequence, outcome and acknowledgement state.
+Older agents reject that field; check compatibility before downgrading and never
+delete execution history to bypass the check. Managed settings are supported;
+production rollout remains separately authorized under the [current plan](plan.md).
 The explicit local setter does not update management revisions or status.
 
 References: [MoveFileExW](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefileexw),

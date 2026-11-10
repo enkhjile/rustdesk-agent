@@ -114,6 +114,24 @@ pub(crate) fn require_admin() -> io::Result<()> {
     Ok(())
 }
 
+/// Password argument privacy was validated only in this service-token context.
+pub fn require_password_service_identity() -> io::Result<()> {
+    for text in ["S-1-5-19".to_owned(), service_sid()?] {
+        let mut sid = null_mut();
+        check(unsafe { ConvertStringSidToSidW(wide(&text).as_ptr(), &mut sid) })?;
+        let _memory = LocalMemory(sid);
+        let mut member = 0;
+        check(unsafe { CheckTokenMembership(null_mut(), sid, &mut member) })?;
+        if member == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "unsupported_password_service_identity",
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn policy(sid: &str) -> io::Result<LocalMemory> {
     // No inherited ACEs; service can read, administrators and SYSTEM can maintain.
     let sddl = format!("O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FRFX;;;{sid})");

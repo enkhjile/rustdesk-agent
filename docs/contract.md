@@ -69,3 +69,6 @@ participate in this protocol or advance applied revision. Its matching CLI readb
 is unverified and must not be mapped to `verified`.
 Choosing `use-permanent-password` selects a verification mode only; it does not
 provision or change a password.
+
+Explicit password changes use the separate [password-operation protocol](password-management.md).
+They never add secrets to desired settings or normal status reports.

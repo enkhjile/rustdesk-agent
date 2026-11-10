@@ -11,6 +11,9 @@ use std::time::{Duration, SystemTime};
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
+#[path = "password_polling.rs"]
+mod password_polling;
+
 const MAX_BODY: usize = 65536;
 
 #[derive(Debug, PartialEq, Eq, Serialize)]

@@ -233,6 +233,8 @@ pub mod managed;
 
 pub mod state;
 
+pub mod password;
+
 #[cfg(windows)]
 #[path = "windows/state_store.rs"]
 pub mod state_store;

@@ -64,6 +64,36 @@ pub async fn query(executable: &Path, query: Query) -> Observation {
     }
 }
 
+/// Official CLI acknowledgement only; no password or raw output is reported.
+#[cfg(windows)]
+pub async fn change_password(
+    executable: &Path,
+    password: zeroize::Zeroizing<String>,
+) -> crate::password::Outcome {
+    use crate::password::Outcome;
+    if !executable.is_absolute()
+        || !executable.is_file()
+        || crate::credentials::require_password_service_identity().is_err()
+        || query(executable, Query::Version).await != Observation::Observed("1.4.7".into())
+    {
+        return Outcome::Unsupported;
+    }
+    let mut command = Command::new(executable);
+    command.arg("--password").arg(password.as_str());
+    match capture(&mut command, Duration::from_secs(15)).await {
+        Ok((success, stdout, stderr)) => {
+            let stdout = zeroize::Zeroizing::new(stdout);
+            let stderr = zeroize::Zeroizing::new(stderr);
+            if success && stderr.is_empty() && stdout.as_slice().trim_ascii() == b"Done!" {
+                Outcome::CommandAccepted
+            } else {
+                Outcome::Indeterminate
+            }
+        }
+        Err(_) => Outcome::Indeterminate,
+    }
+}
+
 #[derive(Serialize)]
 pub struct Detection {
     pub executable_present: bool,

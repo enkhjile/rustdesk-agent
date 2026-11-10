@@ -36,6 +36,103 @@ fn desired(revision: u64, mode: &str) -> String {
 }
 
 #[tokio::test]
+async fn password_interruption_and_lost_ack_never_reexecute() {
+    use crate::password::Outcome;
+    use std::sync::{Arc, Mutex};
+    let operation_id = Uuid::new_v4();
+    let receipts = Arc::new(Mutex::new(Vec::<serde_json::Value>::new()));
+    let received = receipts.clone();
+    let extra = axum::Router::new()
+        .route("/v1/agent/password/claim", axum::routing::post(move |headers: HeaderMap| async move {
+            assert_eq!(headers["authorization"], "Bearer disposable-test-credential-device-a");
+            axum::Json(json!({"schema_version":1,"operation_id":operation_id,"sequence":1,
+                "expires_at":SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs()+900,
+                "password":"test-only-password"}))
+        }))
+        .route("/v1/agent/password/result", axum::routing::post(move |body: axum::body::Bytes| {
+            let received=received.clone();
+            async move {
+                assert!(!String::from_utf8_lossy(&body).contains("test-only-password"));
+                let mut received=received.lock().unwrap();
+                received.push(serde_json::from_slice(&body).unwrap());
+                if received.len()==1 {StatusCode::SERVICE_UNAVAILABLE} else {StatusCode::NO_CONTENT}
+            }
+        }));
+    let fixture = support::Fixture::start_with_routes(extra).await;
+    let store = crate::state::tests::MemoryStore::new(&enrollment(&fixture.url).info());
+    let mut client = restored_poller(&fixture, store.clone());
+    let (started, receiver) = tokio::sync::oneshot::channel();
+    {
+        let interrupted = client.poll_password(|secret| {
+            assert_eq!(&**secret, "test-only-password");
+            started.send(()).unwrap();
+            std::future::pending::<Outcome>()
+        });
+        tokio::pin!(interrupted);
+        tokio::select! {
+            result = &mut interrupted => panic!("unexpected completion: {result:?}"),
+            result = tokio::time::timeout(Duration::from_secs(10), receiver) => result.unwrap().unwrap(),
+        }
+    }
+    assert!(!String::from_utf8_lossy(&store.0.lock().unwrap()).contains("test-only-password"));
+    drop(client);
+    let mut recovered = restored_poller(&fixture, store.clone());
+    assert_eq!(
+        recovered
+            .poll_password(|_| async { panic!("must not replay interrupted command") })
+            .await,
+        PollStatus::DeliveryRejected { status: 503 }
+    );
+    drop(recovered);
+    let mut recovered = restored_poller(&fixture, store);
+    assert_eq!(
+        recovered
+            .poll_password(|_| async { panic!("ack retries cannot execute") })
+            .await,
+        PollStatus::Delivered
+    );
+    {
+        let results = receipts.lock().unwrap();
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0], results[1]);
+        assert_eq!(results[0]["outcome"], "indeterminate");
+    }
+    // A server redelivering the same command after acknowledgement is rejected.
+    assert_eq!(
+        recovered
+            .poll_password(|_| async { panic!("must not replay acknowledged command") })
+            .await,
+        PollStatus::Rejected {
+            reason: "password_operation_conflict"
+        }
+    );
+}
+
+#[tokio::test]
+async fn password_storage_failure_prevents_execution() {
+    let extra=axum::Router::new().route("/v1/agent/password/claim",axum::routing::post(|| async {
+        axum::Json(json!({"schema_version":1,"operation_id":Uuid::new_v4(),"sequence":1,
+            "expires_at":SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs()+900,
+            "password":"test-only-password"}))
+    }));
+    let fixture = support::Fixture::start_with_routes(extra).await;
+    let store = crate::state::tests::MemoryStore::new(&enrollment(&fixture.url).info());
+    let mut client = restored_poller(
+        &fixture,
+        FailSave {
+            store,
+            remaining: 0,
+        },
+    );
+    assert_eq!(
+        client
+            .poll_password(|_| async { panic!("cannot execute without durable intent") })
+            .await,
+        PollStatus::StorageError
+    );
+}
+
+#[tokio::test]
 async fn managed_https_origin_reports_mode_and_preserves_it_on_retry() {
     let fixture = support::Fixture::start().await;
     let origin = fixture.url.replace("127.0.0.1", "console.test");

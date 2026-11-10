@@ -1,7 +1,7 @@
 # Windows RustDesk agent: current plan
 
 Scope: Windows x64 companion agent using official RustDesk. No custom client,
-direct TOML editing, permanent-password provisioning or production deployment.
+direct TOML editing or production deployment.
 This document describes the current branch, including the explicit setter merged
 in PR #12; behavioral results belong in the [validation archive](validation/README.md).
 
@@ -65,9 +65,9 @@ that limitation is not evidence that setters need a custom client.
    underlying executor. The [standard-package, separate-host VM run](validation/console-managed-settings.md)
    passed normal management, mode upgrades, retry and reboot checks. CLI readback permits an honest unverified outcome;
    an independent live verifier is not a prerequisite for supported management.
-   Password changes remain a separate investigation: no product password delivery
-   is implemented until the official command's privilege and secret-input
-   requirements have a supported design.
+   This branch adds separate [password operations](password-management.md).
+   Official-command replacement, access-isolation and reboot tests passed;
+   [integrated delivery validation](validation/password-management.md) also passed.
 3. **Complete deployment work.** The Console fork now provides registration,
    policy polling/report storage and revocation. This change adds local
    administrator credential replacement; the companion Console change provides
