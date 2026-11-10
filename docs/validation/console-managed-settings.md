@@ -39,26 +39,54 @@ passed, including installer checks. Its downloaded package has source commit
 SHA-256 entries were checked. [Console CI](https://github.com/enkhjile/rustdesk-console/actions/runs/42762924219)
 passed for the initial feature commit; subsequent changes require their own green run.
 
-## Remaining isolated-VM checks
+## Isolated-VM results
 
-The prepared runner has **not executed**. It checkpoints both existing disposable
-VMs, connects them through a private Hyper-V switch without an uplink, uses dummy
-credentials and a trusted local HTTPS certificate, and restores/stops both guests.
-No VM result or restoration result is claimed for this change yet.
+The standard CI package from [run 42764210910](https://github.com/enkhjile/rustdesk-agent/actions/runs/42764210910)
+was installed on `RustDeskAgent-Validation` (`RDAGENT-LAB`). Source merge commit:
+`6960e9867a759f39d62e271a4b8986269fa4df89`; executable SHA-256:
+`6BDDE010651DB465EC22AE460C2CE5D7626A3F820E058A5133FDFBA8968E140E`.
+Console commit `27f7614` ran on `RustDeskAgent-Peer` at
+`https://192.0.2.11:8444`, with a test certificate trusted by the target VM.
+The private Hyper-V network had no host/Internet uplink or default route.
+Only dummy credentials were used. The guest reports Windows 10 Pro, build 26200;
+the agent service ran as `NT AUTHORITY\LocalService`, setup as `LabAdmin`.
 
-Pending: install the downloaded package; run the agent as LocalService against
-Console on the other VM; observe real setting changes; verify observe-only
-upgrade behavior, report retry, policy removal/reassignment and reboot retention.
-The standard-package GUI/connection comparison also remains pending. Earlier lab
-executor records are supporting evidence, not substitutes for these checks.
+| Behavior | Result |
+| --- | --- |
+| Elevated agent tests | All 78 passed, including protected enrollment/state tests. |
+| Installer lifecycle and modes | Managed default, explicit ObserveOnly, preserved modes on upgrades, switching back, uninstall/reinstall passed. |
+| Remote Console policy | Revision 1 reported both settings as `unverified_cli_match` in managed mode. |
+| Dropped acknowledgement/restart | Exactly identical sequence-1 report retried and accepted; both deliveries returned 204 at Console. |
+| Observe-only upgrade | Remained observe-only after another upgrade; revision 2 reported `unsupported`, with unchanged administrator detector observations. |
+| Explicit managed upgrade | The same revision 2 was reconsidered and reported `unverified_cli_match`, with enrollment preserved. |
+| Policy removal | Heartbeat sequence 4 had null revision and empty results; accepted watermark stayed at revision 2. |
+| Reassignment | Revision 3 produced sequence 5 with matching CLI evidence. |
+| Unattended reboot | Managed mode and revision 3 survived; sequence advanced to 6 without guest login. |
+| Cleanup | Both checkpoints restored; both VMs Off, zero network adapters, private test switch removed. |
+
+Commands used the normal package's `install.ps1 -Action Install`,
+`-Action Upgrade -Mode ObserveOnly`, `-Action Upgrade` and
+`-Action Upgrade -Mode Managed`, supplying `-SourcePath` and its checked `-Sha256`.
+Enrollment used `--enroll https://192.0.2.11:8444` with redirected stdin, followed
+by administrator `--init-state`. Cycles used `Start-Service RustDeskAgent`,
+`Stop-Service RustDeskAgent` and `Restart-Computer -Force`. The installer test
+was `tests\installer.ps1 -AgentPath <CI executable> -RustDeskPath
+'C:\Program Files\RustDesk\rustdesk.exe'`. Getter comparisons used the agent's
+`--detect` command, not exit status alone.
+
+CLI results remain unverified and `applied_revision` stayed null throughout.
+The standard-package GUI/connection comparison remains pending. Earlier lab
+connection tests are supporting evidence, not a new independent live-verification
+result for this package. This run does not authorize production deployment.
 
 ## Password investigation
 
 Official RustDesk 1.4.7's
 [`--password` implementation](https://github.com/rustdesk/rustdesk/blob/1.4.7/src/core_main.rs)
-requires an installed client and administrator/root privileges, accepts the new
-password as a command-line argument, and prints a diagnostic when those checks
-fail. That path provides no stdin alternative; exit status alone is insufficient.
+requires an installed client and its `is_root()` check, which on Windows also
+accepts an elevated token. This is not equivalent to requiring an administrator
+account. It accepts the new password as a command-line argument and provides no
+stdin alternative in that branch. Exit status alone is insufficient.
 
 The [daemon IPC implementation](https://github.com/rustdesk/rustdesk/blob/1.4.7/src/ipc.rs)
 supports an acknowledgement for permanent-password changes. However, Windows
@@ -66,9 +94,20 @@ supports an acknowledgement for permanent-password changes. However, Windows
 also checks the peer executable against RustDesk's executable. Calling that
 private channel directly from the agent is not an established supported path.
 
-The prepared dummy-only runtime probe compares the official CLI under LocalService
-and an administrator. It has not run. New/old password authentication, persistence
-and process/log exposure still require VM evidence. No password API, secret
-delivery, elevated helper or permanent-password handling was added to the product.
-The remaining design decision is a supported privileged execution mechanism and
-acceptable secret input/exposure, not whether official RustDesk has a password command.
+The installed binary (SHA-256
+`7A43F30721826E6D6B11686A47B3F6D672DC58C1BDB2B62076D704E8BA5235C0`)
+was invoked with `--password <dummy>` under both `NT AUTHORITY\LocalService` and
+`RDAGENT-LAB\LabAdmin`. Both returned exit 0, `Done!`, and empty stderr. A temporary
+service using the same LocalService account as the agent supplied the first
+invocation. The probe recorded only account, exit code and diagnostic categories;
+the dummy value was not included in results. Its checkpoint was restored, leaving
+the VM Off with zero network adapters and no retained password change.
+
+This establishes command acceptance from the existing service account; no account
+promotion or custom RustDesk build is required by that result. It does **not**
+prove fresh connections accept the new password or reject the old one. Those
+checks, restart persistence and process/log exposure testing remain necessary
+before shipping password management. The next implementation needs protected
+delivery, bounded execution and honest outcome reporting around the official CLI's
+argument-based input. No password API, secret delivery, elevated helper or
+permanent-password handling was added to the product in these PRs.

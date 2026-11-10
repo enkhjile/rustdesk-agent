@@ -62,8 +62,8 @@ that limitation is not evidence that setters need a custom client.
    Existing lab [service](validation/2026-11-09-managed-application.md),
    [crash/reboot](validation/2026-11-09-managed-crash-recovery.md) and
    [connection](validation/2026-11-09-managed-connections.md) tests cover the
-   underlying executor. Standard-package, separate-host VM validation remains
-   pending for this branch. CLI readback permits an honest unverified outcome;
+   underlying executor. The [standard-package, separate-host VM run](validation/console-managed-settings.md)
+   passed normal management, mode upgrades, retry and reboot checks. CLI readback permits an honest unverified outcome;
    an independent live verifier is not a prerequisite for supported management.
    Password changes remain a separate investigation: no product password delivery
    is implemented until the official command's privilege and secret-input
