@@ -13,6 +13,40 @@ fn report(sequence: u64) -> Value {
 }
 
 #[tokio::test]
+async fn heartbeat_schema_requires_null_revision_and_empty_results() {
+    let fixture = Fixture::start().await;
+    let mut heartbeat = report(1);
+    heartbeat["desired_revision"] = Value::Null;
+    heartbeat["applied_revision"] = Value::Null;
+    heartbeat["results"] = json!({});
+    assert_eq!(fixture.post(&heartbeat).await.status(), 204);
+    assert_eq!(fixture.post(&heartbeat).await.status(), 204);
+    for (key, value) in [
+        ("results", json!({"approve_mode":"unsupported"})),
+        ("applied_revision", json!(7)),
+    ] {
+        let mut bad = heartbeat.clone();
+        bad[key] = value;
+        assert_eq!(fixture.post(&bad).await.status(), 400);
+    }
+    let mut missing = heartbeat.clone();
+    missing.as_object_mut().unwrap().remove("desired_revision");
+    assert_eq!(fixture.post(&missing).await.status(), 400);
+    assert_eq!(
+        fixture
+            .post_raw(heartbeat.to_string().replace(
+                "\"desired_revision\":null",
+                "\"desired_revision\":null,\"desired_revision\":null"
+            ))
+            .await
+            .status(),
+        400
+    );
+    fixture.assign(A, desired(7, "click")).unwrap();
+    assert_eq!(fixture.post(&heartbeat).await.status(), 409);
+}
+
+#[tokio::test]
 async fn device_isolation_and_authentication() {
     let fixture = Fixture::start().await;
     fixture.assign(A, desired(7, "click")).unwrap();

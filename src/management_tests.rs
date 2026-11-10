@@ -36,6 +36,64 @@ fn desired(revision: u64, mode: &str) -> String {
 }
 
 #[tokio::test]
+async fn unassigned_heartbeat_is_durable_and_retried_after_restart() {
+    let fixture = support::Fixture::start().await;
+    let store = crate::state::tests::MemoryStore::new(&enrollment(&fixture.url).info());
+    let mut client = restored_poller(&fixture, store.clone());
+    fixture.status_response(Some(StatusCode::SERVICE_UNAVAILABLE));
+    let first = client.poll(Some("123".into()), Some("1.4.7".into())).await;
+    assert_eq!(first.status, PollStatus::Unassigned);
+    assert_eq!(first.delivery, Some(PollStatus::HttpError { status: 503 }));
+    let pending = client.state.pending.clone().unwrap();
+    let body = serde_json::to_value(&pending).unwrap();
+    assert_eq!(body["desired_revision"], json!(null));
+    assert_eq!(body["results"], json!({}));
+    assert_eq!(body["observation_sequence"], 1);
+    assert_eq!(body["applied_revision"], json!(null));
+    drop(client);
+    let mut client = restored_poller(&fixture, store);
+    assert_eq!(client.state.pending, Some(pending));
+    fixture.status_response(None);
+    assert_eq!(
+        client.poll(None, None).await.delivery,
+        Some(PollStatus::Delivered)
+    );
+    assert_eq!(fixture.latest(support::A).unwrap(), body);
+    assert_eq!(
+        client.poll(None, None).await.delivery,
+        Some(PollStatus::Delivered)
+    );
+    assert!(
+        fixture.latest(support::A).unwrap()["observation_sequence"]
+            .as_u64()
+            .unwrap()
+            > 1
+    );
+}
+
+#[tokio::test]
+async fn heartbeat_save_failure_prevents_delivery_and_never_calls_setter() {
+    let fixture = support::Fixture::start().await;
+    let store = crate::state::tests::MemoryStore::new(&enrollment(&fixture.url).info());
+    let mut client = restored_poller(
+        &fixture,
+        FailSave {
+            store,
+            remaining: 0,
+        },
+    );
+    let result = client
+        .poll_applying(None, None, |_, _| {
+            panic!("unassigned polls cannot apply settings");
+            #[allow(unreachable_code)]
+            std::future::ready(crate::state::SettingResult::Unsupported)
+        })
+        .await;
+    assert_eq!(result.status, PollStatus::StorageError);
+    assert!(fixture.attempts().is_empty());
+}
+
+#[tokio::test]
 async fn polls_authenticated_state_without_applying_and_retains_watermark() {
     let fixture = support::Fixture::start().await;
     fixture
@@ -350,7 +408,10 @@ async fn report_retry_survives_restart_and_new_observation_supersedes_it() {
         Some(PollStatus::Delivered)
     );
     assert_eq!(fixture.attempts()[1], first);
-    assert!(poller.state.pending.is_none());
+    assert_eq!(
+        serde_json::to_value(poller.state.pending.as_ref().unwrap()).unwrap()["desired_revision"],
+        json!(null)
+    );
     drop(poller);
     let mut poller = restored_poller(&fixture, store);
     respond(&fixture, 200, &desired(6, "click"));
@@ -371,7 +432,7 @@ async fn report_retry_survives_restart_and_new_observation_supersedes_it() {
     poller.poll(None, None).await;
     let report: serde_json::Value =
         serde_json::from_slice(fixture.attempts().last().unwrap()).unwrap();
-    assert_eq!(report["observation_sequence"], 2);
+    assert_eq!(report["observation_sequence"], 3);
 }
 
 struct FailSave {
@@ -575,11 +636,15 @@ async fn managed_storage_failure_stops_writes_and_cancellation_retains_uncertain
             std::future::ready(SettingResult::UnverifiedCliMatch)
         })
         .await;
+    // A rejected heartbeat occupied this cycle's delivery slot; flush the new
+    // application report without creating another observation.
+    respond(&fixture, 503, "");
+    restored.poll(None, None).await;
     let resumed = fixture.latest(support::A).unwrap();
     assert_eq!(calls, 2);
     assert_eq!(
         resumed["observation_sequence"].as_u64().unwrap(),
-        pending["observation_sequence"].as_u64().unwrap() + 1
+        pending["observation_sequence"].as_u64().unwrap() + 2
     );
     assert!(resumed["applied_revision"].is_null());
     assert_eq!(resumed["results"]["approve_mode"], "unverified_cli_match");
@@ -663,7 +728,7 @@ async fn terminal_report_rejections_are_not_replayed_without_new_observation() {
             poller.poll(None, None).await.delivery,
             Some(PollStatus::DeliveryRejected { status: code })
         );
-        respond(&fixture, 204, "");
+        respond(&fixture, 503, "");
         assert_eq!(poller.poll(None, None).await.delivery, None);
         assert_eq!(fixture.attempts().len(), 1);
     }

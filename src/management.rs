@@ -300,6 +300,17 @@ impl Poller {
         };
         let status = response.status();
         if status == reqwest::StatusCode::NO_CONTENT {
+            // Keep an undelivered report intact until it is accepted or rejected.
+            if self.state.pending.is_some() {
+                return (PollStatus::Unassigned, None);
+            }
+            let mut next = self.state.clone();
+            if let Err(reason) = next.heartbeat(id, version) {
+                return (PollStatus::Rejected { reason }, None);
+            }
+            if self.commit(next).is_err() {
+                return (PollStatus::StorageError, None);
+            }
             return (PollStatus::Unassigned, None);
         }
         if status != reqwest::StatusCode::OK {

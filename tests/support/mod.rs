@@ -30,7 +30,7 @@ struct Status {
     agent_uuid: String,
     rustdesk_id: Option<String>,
     rustdesk_version: Option<String>,
-    desired_revision: u64,
+    desired_revision: Option<u64>,
     applied_revision: Option<u64>,
     observation_sequence: u64,
     results: Results,
@@ -111,16 +111,20 @@ async fn status(
     if report.agent_uuid != device {
         return Err(StatusCode::FORBIDDEN);
     }
-    let (state, raw) = backend.desired.get(device).ok_or(StatusCode::CONFLICT)?;
-    if report.desired_revision != state.revision {
+    let desired = backend.desired.get(device);
+    if report.desired_revision != desired.map(|(state, _)| state.revision) {
         return Err(StatusCode::CONFLICT);
     }
     let results = value["results"].as_object().unwrap();
-    let settings = raw["settings"].as_object().unwrap();
-    let verified = results.values().all(|v| v == "verified");
-    if !results.keys().eq(settings.keys())
-        || report.applied_revision != verified.then_some(state.revision)
-    {
+    if let Some((state, raw)) = desired {
+        let settings = raw["settings"].as_object().unwrap();
+        let verified = results.values().all(|v| v == "verified");
+        if !results.keys().eq(settings.keys())
+            || report.applied_revision != verified.then_some(state.revision)
+        {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    } else if !results.is_empty() || report.applied_revision.is_some() {
         return Err(StatusCode::BAD_REQUEST);
     }
     if let Some(previous) = backend.latest.get(device) {

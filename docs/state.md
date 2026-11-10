@@ -71,14 +71,24 @@ physical power-loss and filesystem durability still need disposable Windows test
 A validated authenticated 200 response atomically saves its accepted revision,
 next sequence and new pending report before that report may be sent. Lower or
 conflicting revisions remain rejected across restarts. Sequence overflow is
-rejected; it never wraps. A 204 or failed poll retains the watermark.
+rejected; it never wraps. A 204 or failed poll retains the watermark. An
+authenticated 204 creates a heartbeat with null desired/applied revisions and
+empty results, using the same durable sequence and outbox. It does not call a
+setter. A failed poll creates no heartbeat.
 
 Each cycle first retries an existing pending report byte-for-byte, then polls for
 a fresh desired state. At most one status POST is made per cycle. If no pending
 report was attempted, a newly saved report is sent in the same cycle. Otherwise,
 the new observation replaces the pending slot and is sent next cycle. There is
-only one pending report, not an unbounded queue. UUID/sequence ordering follows
+only one pending report, not an unbounded queue. A no-policy heartbeat does not
+replace a report whose delivery still failed; it waits until that report is
+acknowledged or terminally rejected. UUID/sequence ordering follows
 the existing test-backend contract.
+
+Upgrade Console before agents: older servers reject null-revision heartbeats.
+Existing numeric-revision state loads unchanged. Older agents may not decode a
+pending heartbeat or a nonzero sequence before any assigned revision; downgrading
+requires a compatible binary, not deleting or resetting protected state.
 
 A 204 acknowledgement clears the outbox durably. If that save fails, restart
 retries the original report, which the backend accepts idempotently. HTTP 400,

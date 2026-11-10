@@ -34,7 +34,7 @@
       ]
     },
     "desired_revision": {
-      "type": "integer",
+      "type": ["integer", "null"],
       "minimum": 1,
       "maximum": 18446744073709551615
     },
@@ -53,7 +53,6 @@
     "results": {
       "type": "object",
       "additionalProperties": false,
-      "minProperties": 1,
       "properties": {
         "approve_mode": {
           "enum": [
@@ -84,5 +83,8 @@
       "minimum": 1,
       "maximum": 18446744073709551615
     }
-  }
+  },
+  "if": {"properties": {"desired_revision": {"type": "null"}}},
+  "then": {"properties": {"results": {"maxProperties": 0}, "applied_revision": {"type": "null"}}},
+  "else": {"properties": {"results": {"minProperties": 1}}}
 }
