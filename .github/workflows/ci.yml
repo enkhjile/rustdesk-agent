@@ -34,16 +34,47 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo test --locked --features lab-apply
       - name: Build
-        run: cargo build --locked
+        run: cargo build --locked --release --target x86_64-pc-windows-msvc --no-default-features
       - name: Installer lifecycle
         shell: powershell
         run: |
           $fixture = Join-Path ([Environment]::GetFolderPath('ProgramFiles')) 'RustDeskInstallerFixture'
           if (Test-Path $fixture) { throw 'Fixture path already exists' }
           New-Item -ItemType Directory $fixture | Out-Null
-          Copy-Item target/debug/rustdesk-agent.exe "$fixture\rustdesk.exe"
+          Copy-Item target/x86_64-pc-windows-msvc/release/rustdesk-agent.exe "$fixture\rustdesk.exe"
           # This placeholder is never executed: these CI service checks stay stopped.
-          ./tests/installer.ps1 -AgentPath (Resolve-Path target/debug/rustdesk-agent.exe).Path -RustDeskPath "$fixture\rustdesk.exe"
+          ./tests/installer.ps1 -AgentPath (Resolve-Path target/x86_64-pc-windows-msvc/release/rustdesk-agent.exe).Path -RustDeskPath "$fixture\rustdesk.exe"
+      - name: Prepare test package
+        shell: pwsh
+        run: |
+          $package = 'target/ci-test-package'
+          New-Item -ItemType Directory $package -ErrorAction Stop | Out-Null
+          Copy-Item target/x86_64-pc-windows-msvc/release/rustdesk-agent.exe $package
+          Copy-Item scripts/install.ps1 $package
+          Copy-Item docs/ci-test-package.md "$package/README.md"
+          $source = git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot identify checked-out source' }
+          $compiler = rustc --version
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot identify Rust compiler' }
+          [ordered]@{
+            source_commit = $source
+            workflow_run = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+            run_attempt = $env:GITHUB_RUN_ATTEMPT
+            target = 'x86_64-pc-windows-msvc'
+            profile = 'release'
+            features = @()
+            rustc = $compiler
+          } | ConvertTo-Json | Set-Content "$package/build.json" -Encoding utf8
+          @('rustdesk-agent.exe', 'install.ps1', 'README.md', 'build.json') | ForEach-Object {
+            '{0}  {1}' -f (Get-FileHash "$package/$_" -Algorithm SHA256).Hash.ToLowerInvariant(), $_
+          } | Set-Content "$package/SHA256SUMS" -Encoding ascii
+      - name: Upload test package
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rustdesk-agent-test-windows-x64-${{ github.sha }}
+          path: target/ci-test-package/
+          if-no-files-found: error
+          retention-days: 7
 
   dependencies:
     name: Dependency checks

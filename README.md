@@ -145,7 +145,11 @@ semantic-release runs after checks on pushes to `alpha`
 and `main`. Merging a
 release-worthy change publishes directly; there is no release PR. `alpha` creates
 GitHub prereleases, and `main` creates stable releases. No npm or crates.io package
-is published, and there is no executable artifact or deployment yet.
+is published. GitHub releases contain tags and notes, without executable assets.
+Successful Windows CI jobs retain a seven-day [test package](docs/ci-test-package.md)
+with the default-feature-free executable, installer, checksums and build metadata
+for isolated validation. This unsigned artifact is separate from release
+publication; no production deployment is configured.
 
 With no prior release tags, semantic-release starts at `1.0.0-alpha.1` on `alpha`
 and `1.0.0` on `main`. The checked-in `0.0.0-development` Cargo version is a development
