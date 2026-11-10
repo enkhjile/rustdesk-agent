@@ -31,8 +31,6 @@ jobs:
       - name: Test
         run: |
           cargo test --locked
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo test --locked --features lab-apply
       - name: Build
         run: cargo build --locked --release --target x86_64-pc-windows-msvc --no-default-features
       - name: Installer lifecycle
@@ -47,7 +45,7 @@ jobs:
       - name: Prepare test package
         shell: pwsh
         run: |
-          $package = 'target/ci-test-package'
+          $package = Join-Path $env:RUNNER_TEMP 'ci-test-package'
           New-Item -ItemType Directory $package -ErrorAction Stop | Out-Null
           Copy-Item target/x86_64-pc-windows-msvc/release/rustdesk-agent.exe $package
           Copy-Item scripts/install.ps1 $package
@@ -72,7 +70,7 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: rustdesk-agent-test-windows-x64-${{ github.sha }}
-          path: target/ci-test-package/
+          path: ${{ runner.temp }}/ci-test-package/
           if-no-files-found: error
           retention-days: 7
 

@@ -36,6 +36,19 @@ pub struct StatusReport {
     #[serde(deserialize_with = "required_nullable")]
     applied_revision: Option<u64>,
     results: Results,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::present_setting"
+    )]
+    pub(crate) management_mode: Option<ManagementMode>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ManagementMode {
+    ObserveOnly,
+    Managed,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -121,6 +134,7 @@ impl DurableState {
                 report.rustdesk_id.clone(),
                 report.rustdesk_version.clone(),
             );
+            expected.management_mode = report.management_mode;
             for (key, _) in accepted.into_iter().flat_map(DesiredState::pairs) {
                 let result = match key {
                     Setting::ApproveMode => report.results.approve_mode,
@@ -195,6 +209,7 @@ impl DurableState {
             desired_revision: desired.map(|s| s.revision),
             observation_sequence: self.sequence,
             applied_revision: None,
+            management_mode: None,
             results: Results {
                 approve_mode: desired
                     .and_then(|s| s.settings.approve_mode)

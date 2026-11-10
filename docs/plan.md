@@ -3,18 +3,18 @@
 Scope: Windows x64 companion agent using official RustDesk. No custom client,
 direct TOML editing, permanent-password provisioning or production deployment.
 This document describes the current branch, including the explicit setter merged
-in PR #12; dated results belong in the [validation archive](validation/README.md).
+in PR #12; behavioral results belong in the [validation archive](validation/README.md).
 
 ## Implemented and validated
 
 | Area | Current behavior and evidence |
 | --- | --- |
-| Desired-state core | Strict allowlist, revision guards and per-setting reconciliation tested with an in-memory adapter; not connected to service writes. |
+| Desired-state core | Strict allowlist, revision guards and per-setting reconciliation tested with an in-memory adapter; used by managed service polling. |
 | Contract fixture | In-process Rust loopback HTTPS backend with schema, authentication, revision and report-ordering tests. No production server. |
 | Windows service and enrollment | SCM lifecycle, machine-DPAPI enrollment and service-SID ACLs. VM tests passed service access, ordinary-user/unrelated-service denial, administrator initialization and unattended reboot. |
-| Durable polling | Authenticated HTTPS, bounded retries, revision watermark, observation sequence and pending report. Real-service tests passed GET/POST cancellation, retry identity and restart/reboot retention. Default reports remain `unsupported`; lab application reports per-setting unverified outcomes, always with null applied revision. |
+| Durable polling | Authenticated HTTPS, bounded retries, revision watermark, observation sequence and pending report. Real-service tests passed GET/POST cancellation, retry identity and restart/reboot retention. Observe-only reports remain `unsupported`; managed application reports per-setting unverified outcomes, always with null applied revision. |
 | Read-only detector | Bounded official CLI queries; settings are `unverified_cli_value` or `ambiguous_default`, never verified live. A real stalled getter child was terminated on service stop. |
-| Explicit local setter | `--set-option` accepts only approve-mode and verification-method values for 1.4.7. Tested as administrator and LocalService, with cross-account readback and restart/reboot persistence. Only opt-in lab polling invokes it automatically. |
+| Explicit local setter | `--set-option` accepts only approve-mode and verification-method values for 1.4.7. Tested as administrator and LocalService, with cross-account readback and restart/reboot persistence. Managed polling invokes it automatically. |
 
 The [service record](validation/2026-11-08-service-lifecycle.md) contains the isolation
 and lifecycle evidence. The [getter diagnosis](validation/2026-11-08-getter-diagnosis-and-gui.md)
@@ -55,28 +55,25 @@ that limitation is not evidence that setters need a custom client.
    to clean up its process tree on exit. The actual setter retest passed.
    Keep command acceptance, CLI readback, GUI state and connection
    behavior distinct.
-2. **Define verified automatic application.** The default-off `lab-apply` build
-   feature and service flag connect polling to the existing setter only for a
-   loopback HTTPS lab. Durable per-setting results remain unverified and applied
-   revision remains null. Its [service test](validation/2026-11-09-managed-application.md)
-   passed drift, partial-result, retry and cancellation checks. The subsequent
-   [crash/reboot test](validation/2026-11-09-managed-crash-recovery.md) passed actual
-   setter cleanup, durable uncertainty, report retry and fresh-state recovery.
-   The [managed connection test](validation/2026-11-09-managed-connections.md)
-   independently confirmed click approval, temporary-password access and rejection
-   of that password after a higher revision selected permanent-only mode.
-   These user-assisted observations do not implement an automatic live verifier.
-   Establish what evidence is sufficient
-   for a per-setting `verified` result before enabling production application.
-   Exercise revision changes, drift, partial outcomes and status against actual
-   connection behavior in an isolated management canary. Production service writes
-   stay disabled until this is implemented and validated.
+2. **Enable normal Console management.** This branch promotes the existing executor
+   into the standard build with a managed service mode and authenticated remote
+   HTTPS origins. New installations default to Managed; upgrades preserve mode.
+   Console displays current policy, pending changes and unverified CLI outcomes.
+   Existing lab [service](validation/2026-11-09-managed-application.md),
+   [crash/reboot](validation/2026-11-09-managed-crash-recovery.md) and
+   [connection](validation/2026-11-09-managed-connections.md) tests cover the
+   underlying executor. The [standard-package, separate-host VM run](validation/console-managed-settings.md)
+   passed normal management, mode upgrades, retry and reboot checks. CLI readback permits an honest unverified outcome;
+   an independent live verifier is not a prerequisite for supported management.
+   Password changes remain a separate investigation: no product password delivery
+   is implemented until the official command's privilege and secret-input
+   requirements have a supported design.
 3. **Complete deployment work.** The Console fork now provides registration,
-   read-only polling/report storage and revocation. This change adds local
+   policy polling/report storage and revocation. This change adds local
    administrator credential replacement; the companion Console change provides
    rotation without resetting identity or history. Their isolated
    [recovery test](validation/credential-rotation.md) passed, including ordinary-user
-   CLI replacement rejection. Enrollment UI remains unfinished.
+   CLI replacement rejection. Enrollment and management controls are available on the device page.
    An administrator-run [installer](installer.md) now implements retained-data
    install/upgrade/uninstall; [isolated runtime checks](validation/windows-installer.md)
    passed, including running upgrades and reporting after reinstall. No-policy
@@ -103,11 +100,11 @@ repository's [test-backend contract](contract.md).
 - Keep accepted revision separate from applied revision. Persist accepted state,
   sequence and pending status before delivery; never silently reset corrupt state
   or regenerate an enrolled identity. See [state recovery](state.md).
-- Authenticate and validate before any future automatic application. Do not apply
+- Authenticate and validate before automatic application. Do not apply
   cached state after 204, invalid responses or outages. Retain the watermark.
-- The future application loop must serialize cycles, reject stale/equivocating
+- The application loop must serialize cycles, reject stale/equivocating
   revisions, repair drift at unchanged revisions, and preserve partial outcomes.
-  Matching CLI cache output alone cannot satisfy its live-verification requirement.
+  Matching CLI output is reported as unverified, never as live verification.
 - Settings are not transactional. No automatic rollback is implied; a failed or
   canceled explicit command may have changed a setting. A future managed rollback
   requires a new higher revision. Stopping the agent does not restore settings.

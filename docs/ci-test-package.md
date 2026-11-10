@@ -2,8 +2,9 @@
 
 For disposable lab validation only. This unsigned package is not a production
 installer or a GitHub release asset. Distribution licensing, dependency notices
-and signing remain unfinished. Automatic settings writes are disabled: the build
-uses `--no-default-features` without `lab-apply`.
+and signing remain unfinished. The normal build includes managed application.
+Install defaults to Managed; add `-Mode ObserveOnly` for reporting only. Upgrade
+preserves the existing mode unless `-Mode` is supplied.
 
 Download the `rustdesk-agent-test-windows-x64-<commit>` artifact from a successful
 CI run in `enkhjile/rustdesk-agent`. Check the run's source and all jobs before

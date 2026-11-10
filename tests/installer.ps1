@@ -33,7 +33,7 @@ $service = Get-CimInstance Win32_Service -Filter "Name='RustDeskAgent'"
 Assert ($service.StartName -eq 'NT AUTHORITY\LocalService') 'Wrong service account'
 Assert ($service.State -eq 'Stopped') 'Install unexpectedly started service'
 Assert ($service.StartMode -eq 'Auto') 'Service is not automatic'
-Assert ($service.PathName -notmatch 'lab-apply') 'Writes enabled'
+Assert ($service.PathName.EndsWith(' --manage')) 'New installation is not managed'
 Assert ((Get-ItemProperty HKLM:\SYSTEM\CurrentControlSet\Services\RustDeskAgent).ServiceSidType -eq 1) 'Missing service SID'
 Assert ((Get-FileHash "$directory\rustdesk-agent.exe").Hash -eq $hash) 'Installed bytes differ'
 Assert (Get-Acl $directory).AreAccessRulesProtected 'Executable directory inherits permissions'
@@ -52,10 +52,18 @@ try { Reject { & $installer -Action Uninstall -RustDeskPath $RustDeskPath } 'Uni
 finally { Remove-Item -LiteralPath "$directory\unexpected.txt" }
 & $installer -Action Upgrade -SourcePath $AgentPath -Sha256 $hash -RustDeskPath $RustDeskPath
 Assert ((Get-Service RustDeskAgent).Status -eq 'Stopped') 'Upgrade started a stopped service'
+Assert ((Get-CimInstance Win32_Service -Filter "Name='RustDeskAgent'").PathName.EndsWith(' --manage')) 'Upgrade lost managed mode'
+& $installer -Action Upgrade -SourcePath $AgentPath -Sha256 $hash -RustDeskPath $RustDeskPath -Mode ObserveOnly
+Assert (!(Get-CimInstance Win32_Service -Filter "Name='RustDeskAgent'").PathName.EndsWith(' --manage')) 'Observe-only mode not selected'
+& $installer -Action Upgrade -SourcePath $AgentPath -Sha256 $hash -RustDeskPath $RustDeskPath
+Assert (!(Get-CimInstance Win32_Service -Filter "Name='RustDeskAgent'").PathName.EndsWith(' --manage')) 'Legacy observe-only upgrade enabled writes'
+& $installer -Action Upgrade -SourcePath $AgentPath -Sha256 $hash -RustDeskPath $RustDeskPath -Mode Managed
+Assert ((Get-CimInstance Win32_Service -Filter "Name='RustDeskAgent'").PathName.EndsWith(' --manage')) 'Explicit management enable failed'
 & $installer -Action Uninstall -RustDeskPath $RustDeskPath
 Assert (!(Get-Service RustDeskAgent -ErrorAction SilentlyContinue)) 'Uninstall left service'
 Assert (!(Test-Path $directory)) 'Uninstall left executable directory'
 Assert (Test-Path $reports) 'Uninstall removed retained reports'
-& $installer -Action Install -SourcePath $AgentPath -Sha256 $hash -RustDeskPath $RustDeskPath
+& $installer -Action Install -SourcePath $AgentPath -Sha256 $hash -RustDeskPath $RustDeskPath -Mode ObserveOnly
+Assert (!(Get-CimInstance Win32_Service -Filter "Name='RustDeskAgent'").PathName.EndsWith(' --manage')) 'Observe-only install enabled writes'
 & $installer -Action Uninstall -RustDeskPath $RustDeskPath
 'Installer lifecycle checks passed'

@@ -29,11 +29,8 @@ fn is_report_path(path: &Path) -> bool {
 pub fn dispatch(
     executable: PathBuf,
     report: PathBuf,
-    lab_apply: bool,
+    manage: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    if lab_apply && !cfg!(feature = "lab-apply") {
-        return Err("Lab application is not compiled into this build".into());
-    }
     if !executable.is_absolute() || !is_report_path(&report) || report == executable {
         return Err(
             "Use an absolute executable path and a distinct absolute .json report path".into(),
@@ -43,7 +40,7 @@ pub fn dispatch(
         return Err("Report directory must already exist and be administrator-protected".into());
     }
     CONFIG
-        .set((executable, report, lab_apply))
+        .set((executable, report, manage))
         .map_err(|_| "service already configured")?;
     service_dispatcher::start(NAME, ffi_service_main)?;
     Ok(())
@@ -119,13 +116,11 @@ fn run(
         Err(error) => return Err(error.into()),
     };
     publish(handle, ServiceState::Running, false)?;
-    let (executable, report_path, lab_apply) =
-        CONFIG.get().ok_or("missing service configuration")?;
+    let (executable, report_path, manage) = CONFIG.get().ok_or("missing service configuration")?;
     // Also contain worker processes if the service itself is forcibly killed.
-    if *lab_apply {
+    if *manage {
         crate::process_job::install()?;
     }
-    #[cfg(feature = "lab-apply")]
     let agent = std::env::current_exe()?;
     let enrollment_info = enrollment.as_ref().map(|value| value.info());
     runtime.block_on(async {
@@ -150,8 +145,7 @@ fn run(
                     biased;
                     _ = stop.changed() => break,
                     observation = async {
-                        #[cfg(feature = "lab-apply")]
-                        if *lab_apply {
+                        if *manage {
                             return poller.poll_applying(observed(&detection.rustdesk_id), observed(&detection.version),
                                 |key, wanted| rustdesk_agent::managed::apply(&agent, executable, key, wanted)).await;
                         }

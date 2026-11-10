@@ -47,3 +47,7 @@ Console display, policy removal/reassignment and credential revocation.
 The [downloaded CI package record](ci-test-package.md) covers upgrade from
 alpha.12, pending-report recovery, enrollment, policy changes, credential
 rotation/revocation and retained-data reinstall using the actual CI artifact.
+
+The [normal Console management record](console-managed-settings.md) separates
+completed build, protocol and browser tests from pending separate-host VM checks,
+and records the official-client password investigation.
