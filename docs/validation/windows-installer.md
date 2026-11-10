@@ -39,10 +39,17 @@ expected error, so an unrelated failure cannot count as successful refusal.
 The VM checkpoint was restored, its temporary checkpoint removed, and the VM
 stopped with zero network adapters. No RustDesk settings were changed.
 
+[Hosted Windows Server 2022 CI](https://github.com/enkhjile/rustdesk-agent/actions/runs/42739073979)
+passed the corrected installer lifecycle test, including the restored-ACL
+regression, stopped upgrade, uninstall/reinstall and all refusal cases. Both
+default and `lab-apply` Rust tests, formatting, Clippy, build and dependency checks
+passed. The installer did not start the service during these hosted checks.
+
 ## Remaining runtime gate
 
 The corrected lifecycle and enrolled-service scenarios still require a completed
-VM run. They are not established by compilation or the first partial run:
+isolated VM run with official RustDesk. Hosted stopped-service checks do not
+establish running upgrade behavior or enrolled-state preservation:
 
 ```powershell
 .\tests\installer.ps1 -AgentPath C:\Staging\rustdesk-agent.exe `
