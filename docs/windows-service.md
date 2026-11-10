@@ -193,7 +193,9 @@ copies of headers; zeroization is not a guarantee against memory capture.
 
 Connect timeout is 5 seconds and the whole request/body deadline is 10 seconds.
 Only JSON 200 responses up to 64 KiB are parsed, with the existing strict schema
-and persisted revision guard. A 204 means unassigned, retaining the watermark.
+and persisted revision guard. A 204 means unassigned, retaining the watermark
+and queueing a durable heartbeat with no setting outcomes. Heartbeats use the
+same delivery retries and normal polling interval; they do not prove live health.
 Invalid, stale and conflicting state is rejected. Acceptance does not verify or
 apply any RustDesk setting. There is no settings adapter in the polling path.
 

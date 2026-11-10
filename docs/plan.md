@@ -79,8 +79,8 @@ that limitation is not evidence that setters need a custom client.
    CLI replacement rejection. Enrollment UI remains unfinished.
    An administrator-run [installer](installer.md) now implements retained-data
    install/upgrade/uninstall; [isolated runtime checks](validation/windows-installer.md)
-   passed, including running upgrades and reporting after reinstall. Define
-   heartbeat/error reporting without a desired revision. Complete executable
+   passed, including running upgrades and reporting after reinstall. No-policy
+   heartbeats use the durable status outbox without enabling writes. Complete executable
    provenance/signing and validate
    report-write failure handling and physical power-loss durability. Select a
    distribution license and include dependency notices before executable release.
