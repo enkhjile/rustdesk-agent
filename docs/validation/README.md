@@ -43,3 +43,7 @@ running upgrades, retained enrollment/state, uninstall and reporting after reins
 
 The [heartbeat record](heartbeat.md) covers no-policy reports, durable retries,
 Console display, policy removal/reassignment and credential revocation.
+
+The [downloaded CI package record](ci-test-package.md) covers upgrade from
+alpha.12, pending-report recovery, enrollment, policy changes, credential
+rotation/revocation and retained-data reinstall using the actual CI artifact.
