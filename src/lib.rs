@@ -175,36 +175,40 @@ impl RevisionGuard {
 /// Reconcile one state without revision history. Use RevisionGuard for repeated polls.
 pub fn reconcile(io: &mut impl SettingsIo, desired: &DesiredState) -> Report {
     let mut results = BTreeMap::new();
-    let pairs = desired.pairs();
-    let valid = desired.is_valid();
-    if !valid {
+    if !desired.is_valid() {
         return Report {
             desired_revision: desired.revision,
             applied_revision: None,
             results,
         };
     }
-    for (key, wanted) in &pairs {
-        let outcome = match io.read(*key) {
-            Err(SettingsError) => Outcome::ReadFailed,
-            Ok(actual) if actual == *wanted => Outcome::Verified,
-            Ok(_) => match io.write(*key, wanted) {
-                Err(SettingsError) => Outcome::WriteFailed,
-                Ok(()) => match io.read(*key) {
-                    Err(SettingsError) => Outcome::ReadFailed,
-                    Ok(actual) if actual == *wanted => Outcome::Verified,
-                    Ok(_) => Outcome::Mismatch,
-                },
-            },
-        };
-        results.insert(*key, outcome);
+    for (key, wanted) in desired.pairs() {
+        results.insert(key, reconcile_setting(io, key, wanted));
     }
-    let applied_revision =
-        (valid && results.values().all(|r| *r == Outcome::Verified)).then_some(desired.revision);
+    let applied_revision = results
+        .values()
+        .all(|r| *r == Outcome::Verified)
+        .then_some(desired.revision);
     Report {
         desired_revision: desired.revision,
         applied_revision,
         results,
+    }
+}
+
+fn reconcile_setting(io: &mut impl SettingsIo, key: Setting, wanted: &str) -> Outcome {
+    match io.read(key) {
+        Err(SettingsError) => return Outcome::ReadFailed,
+        Ok(actual) if actual == wanted => return Outcome::Verified,
+        Ok(_) => (),
+    }
+    if io.write(key, wanted).is_err() {
+        return Outcome::WriteFailed;
+    }
+    match io.read(key) {
+        Err(SettingsError) => Outcome::ReadFailed,
+        Ok(actual) if actual == wanted => Outcome::Verified,
+        Ok(_) => Outcome::Mismatch,
     }
 }
 
