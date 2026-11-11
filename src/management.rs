@@ -176,9 +176,7 @@ impl Poller {
                 self.failures = 0;
                 60
             } else {
-                let seconds = retry_delay(self.failures, retry_after, Uuid::new_v4().as_u128());
-                self.failures = self.failures.saturating_add(1);
-                seconds
+                next_failure_delay(&mut self.failures, retry_after)
             };
         if let Some((result, retry_after)) = &delivery {
             if matches!(
@@ -187,9 +185,7 @@ impl Poller {
             ) {
                 self.report_failures = 0;
             } else {
-                let delay =
-                    retry_delay(self.report_failures, *retry_after, Uuid::new_v4().as_u128());
-                self.report_failures = self.report_failures.saturating_add(1);
+                let delay = next_failure_delay(&mut self.report_failures, *retry_after);
                 next_poll_seconds =
                     if matches!(status, PollStatus::Accepted { .. } | PollStatus::Unassigned) {
                         delay
@@ -294,7 +290,7 @@ impl Poller {
             .header(header::ACCEPT, "application/json")
             .send()
             .await;
-        let mut response = match response {
+        let response = match response {
             Ok(response) => response,
             Err(error) => return (transport_error(error), None),
         };
@@ -322,49 +318,10 @@ impl Poller {
                 response_retry_after(&response),
             );
         }
-        let json = response
-            .headers()
-            .get(header::CONTENT_TYPE)
-            .and_then(|value| value.to_str().ok())
-            .and_then(|value| value.split(';').next())
-            .is_some_and(|value| value.trim().eq_ignore_ascii_case("application/json"));
-        if !json {
-            return (
-                PollStatus::Rejected {
-                    reason: "invalid_content_type",
-                },
-                None,
-            );
-        }
-        if response
-            .content_length()
-            .is_some_and(|size| size > MAX_BODY as u64)
-        {
-            return (
-                PollStatus::Rejected {
-                    reason: "response_too_large",
-                },
-                None,
-            );
-        }
-        let mut body = Vec::new();
-        loop {
-            match response.chunk().await {
-                Ok(Some(chunk)) if chunk.len() <= MAX_BODY - body.len() => {
-                    body.extend_from_slice(&chunk)
-                }
-                Ok(Some(_)) => {
-                    return (
-                        PollStatus::Rejected {
-                            reason: "response_too_large",
-                        },
-                        None,
-                    );
-                }
-                Ok(None) => break,
-                Err(error) => return (transport_error(error), None),
-            }
-        }
+        let body = match read_desired_body(response).await {
+            Ok(body) => body,
+            Err(status) => return (status, None),
+        };
         let result = parse_desired(&body).and_then(|state| {
             let mut next = self.state.clone();
             next.observe(&state, id, version)?;
@@ -402,6 +359,38 @@ impl Poller {
     }
 }
 
+async fn read_desired_body(mut response: reqwest::Response) -> Result<Vec<u8>, PollStatus> {
+    let json = response
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.split(';').next())
+        .is_some_and(|value| value.trim().eq_ignore_ascii_case("application/json"));
+    if !json {
+        return Err(PollStatus::Rejected {
+            reason: "invalid_content_type",
+        });
+    }
+    if response
+        .content_length()
+        .is_some_and(|size| size > MAX_BODY as u64)
+    {
+        return Err(PollStatus::Rejected {
+            reason: "response_too_large",
+        });
+    }
+    let mut body = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(transport_error)? {
+        if chunk.len() > MAX_BODY - body.len() {
+            return Err(PollStatus::Rejected {
+                reason: "response_too_large",
+            });
+        }
+        body.extend_from_slice(&chunk);
+    }
+    Ok(body)
+}
+
 fn transport_error(error: reqwest::Error) -> PollStatus {
     // Never serialize reqwest errors, URLs, response bodies or request headers.
     if error.is_timeout() {
@@ -430,6 +419,12 @@ fn parse_retry_after(value: &str, now: SystemTime) -> Option<u64> {
             .map(|date| date.duration_since(now).unwrap_or_default().as_secs())
     })?;
     Some(seconds.min(300))
+}
+
+fn next_failure_delay(failures: &mut u32, retry_after: Option<u64>) -> u64 {
+    let delay = retry_delay(*failures, retry_after, Uuid::new_v4().as_u128());
+    *failures = failures.saturating_add(1);
+    delay
 }
 
 fn retry_delay(failures: u32, retry_after: Option<u64>, random: u128) -> u64 {
