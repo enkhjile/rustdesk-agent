@@ -294,7 +294,7 @@ impl Poller {
             .header(header::ACCEPT, "application/json")
             .send()
             .await;
-        let mut response = match response {
+        let response = match response {
             Ok(response) => response,
             Err(error) => return (transport_error(error), None),
         };
@@ -322,49 +322,10 @@ impl Poller {
                 response_retry_after(&response),
             );
         }
-        let json = response
-            .headers()
-            .get(header::CONTENT_TYPE)
-            .and_then(|value| value.to_str().ok())
-            .and_then(|value| value.split(';').next())
-            .is_some_and(|value| value.trim().eq_ignore_ascii_case("application/json"));
-        if !json {
-            return (
-                PollStatus::Rejected {
-                    reason: "invalid_content_type",
-                },
-                None,
-            );
-        }
-        if response
-            .content_length()
-            .is_some_and(|size| size > MAX_BODY as u64)
-        {
-            return (
-                PollStatus::Rejected {
-                    reason: "response_too_large",
-                },
-                None,
-            );
-        }
-        let mut body = Vec::new();
-        loop {
-            match response.chunk().await {
-                Ok(Some(chunk)) if chunk.len() <= MAX_BODY - body.len() => {
-                    body.extend_from_slice(&chunk)
-                }
-                Ok(Some(_)) => {
-                    return (
-                        PollStatus::Rejected {
-                            reason: "response_too_large",
-                        },
-                        None,
-                    );
-                }
-                Ok(None) => break,
-                Err(error) => return (transport_error(error), None),
-            }
-        }
+        let body = match read_desired_body(response).await {
+            Ok(body) => body,
+            Err(status) => return (status, None),
+        };
         let result = parse_desired(&body).and_then(|state| {
             let mut next = self.state.clone();
             next.observe(&state, id, version)?;
@@ -400,6 +361,38 @@ impl Poller {
             None,
         )
     }
+}
+
+async fn read_desired_body(mut response: reqwest::Response) -> Result<Vec<u8>, PollStatus> {
+    let json = response
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.split(';').next())
+        .is_some_and(|value| value.trim().eq_ignore_ascii_case("application/json"));
+    if !json {
+        return Err(PollStatus::Rejected {
+            reason: "invalid_content_type",
+        });
+    }
+    if response
+        .content_length()
+        .is_some_and(|size| size > MAX_BODY as u64)
+    {
+        return Err(PollStatus::Rejected {
+            reason: "response_too_large",
+        });
+    }
+    let mut body = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(transport_error)? {
+        if chunk.len() > MAX_BODY - body.len() {
+            return Err(PollStatus::Rejected {
+                reason: "response_too_large",
+            });
+        }
+        body.extend_from_slice(&chunk);
+    }
+    Ok(body)
 }
 
 fn transport_error(error: reqwest::Error) -> PollStatus {
