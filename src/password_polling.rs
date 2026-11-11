@@ -1,4 +1,4 @@
-use super::{PollStatus, Poller};
+use super::{PollStatus, Poller, response_retry_after, retry_delay};
 use crate::password::{Attempt, Operation, Outcome};
 use reqwest::{Method, header};
 use std::time::UNIX_EPOCH;
@@ -13,6 +13,31 @@ impl Poller {
         F: FnOnce(Zeroizing<String>) -> Fut,
         Fut: std::future::Future<Output = Outcome>,
     {
+        let mut retry_after = None;
+        let status = self.poll_password_once(apply, &mut retry_after).await;
+        if matches!(status, PollStatus::Delivered | PollStatus::Unassigned) {
+            self.password_failures = 0;
+            self.password_retry_seconds = 0;
+        } else {
+            self.password_retry_seconds = retry_delay(
+                self.password_failures,
+                retry_after,
+                uuid::Uuid::new_v4().as_u128(),
+            );
+            self.password_failures = self.password_failures.saturating_add(1);
+        }
+        status
+    }
+
+    async fn poll_password_once<F, Fut>(
+        &mut self,
+        apply: F,
+        retry_after: &mut Option<u64>,
+    ) -> PollStatus
+    where
+        F: FnOnce(Zeroizing<String>) -> Fut,
+        Fut: std::future::Future<Output = Outcome>,
+    {
         if self.poisoned {
             return PollStatus::StorageError;
         }
@@ -22,7 +47,7 @@ impl Poller {
             .as_ref()
             .is_some_and(|a| !a.acknowledged)
         {
-            return self.deliver_password().await;
+            return self.deliver_password(retry_after).await;
         }
         let mut response = match self
             .authenticated_request(Method::POST, "/v1/agent/password/claim")
@@ -38,6 +63,7 @@ impl Poller {
             return PollStatus::Unassigned;
         }
         if status != 200 {
+            *retry_after = response_retry_after(&response);
             return PollStatus::HttpError { status };
         }
         if response
@@ -100,10 +126,10 @@ impl Poller {
                 return PollStatus::StorageError;
             }
         }
-        self.deliver_password().await
+        self.deliver_password(retry_after).await
     }
 
-    async fn deliver_password(&mut self) -> PollStatus {
+    async fn deliver_password(&mut self, retry_after: &mut Option<u64>) -> PollStatus {
         let attempt = self
             .state
             .password_attempt
@@ -129,6 +155,7 @@ impl Poller {
         };
         let status = response.status().as_u16();
         if status != 204 {
+            *retry_after = response_retry_after(&response);
             return PollStatus::DeliveryRejected { status };
         }
         let mut next = self.state.clone();

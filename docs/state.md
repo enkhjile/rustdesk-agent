@@ -104,8 +104,9 @@ local snapshot; it is not an acknowledgement of applied settings.
 Requests share the enrolled HTTPS origin, authentication, TLS validation,
 redirect/proxy restrictions and timeouts. Service shutdown cancels either network
 request or retry wait. Small synchronous state/snapshot file operations must
-finish before shutdown is handled. There are no reports without a desired
-revision; unassigned-device/network diagnostics stay local.
+finish before shutdown is handled. An authenticated desired-state 204 produces a
+heartbeat with null desired/applied revisions and empty results, retaining the
+accepted revision watermark. Failed polls do not generate heartbeats.
 
 ## Recovery and rollback
 

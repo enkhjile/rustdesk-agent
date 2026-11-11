@@ -47,6 +47,8 @@ pub struct Poller {
     poisoned: bool,
     report_failures: u32,
     failures: u32,
+    password_failures: u32,
+    password_retry_seconds: u64,
 }
 
 fn client_builder() -> ClientBuilder {
@@ -63,6 +65,13 @@ fn client_builder() -> ClientBuilder {
 }
 
 impl Poller {
+    /// Delay for the service loop after settings and optional password polling.
+    pub fn next_poll_seconds(&self, observation: &PollObservation) -> u64 {
+        observation
+            .next_poll_seconds
+            .max(self.password_retry_seconds)
+    }
+
     fn authenticated_request(
         &self,
         method: Method,
@@ -99,6 +108,8 @@ impl Poller {
             poisoned: false,
             report_failures: 0,
             failures: 0,
+            password_failures: 0,
+            password_retry_seconds: 0,
         })
     }
 

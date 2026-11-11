@@ -58,6 +58,15 @@ The command shares the settings-command lock and existing job containment. Servi
 stop cancels the child. Neither password handling nor an acknowledgement advances
 the settings policy's applied revision.
 
+Failed claims and result acknowledgements share an independent in-memory failure
+counter with bounded exponential backoff and jitter (5–300 seconds). HTTP 429 and
+5xx responses also honor numeric or HTTP-date `Retry-After`, capped at 300 seconds.
+Malformed headers are ignored. A claim returning 204 or an acknowledged result
+resets this counter; successful settings polls do not. The service waits for the
+larger of the settings/report delay and the password retry delay, so healthy
+settings polling keeps a 60-second minimum. Restart resets retry timing, but
+retains the durable operation history and pending acknowledgement.
+
 ## Secret boundary and validation
 
 The official client accepts the password as a process argument. VM checks denied

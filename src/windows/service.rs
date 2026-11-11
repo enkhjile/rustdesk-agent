@@ -175,9 +175,10 @@ fn run(
             if matches!(password, Some(rustdesk_agent::management::PollStatus::StorageError)) {
                 return Err("password state persistence failed".into());
             }
-            let delay = management
-                .as_ref()
-                .map_or(60, |value| value.next_poll_seconds);
+            let delay = match (&poller, &management) {
+                (Some(poller), Some(observation)) => poller.next_poll_seconds(observation),
+                _ => 60,
+            };
             let snapshot = serde_json::json!({
                 "observed_at_unix_seconds": SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
                 "detection": detection,
