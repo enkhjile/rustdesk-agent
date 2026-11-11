@@ -145,11 +145,11 @@ semantic-release runs after checks on pushes to `alpha`
 and `main`. Merging a
 release-worthy change publishes directly; there is no release PR. `alpha` creates
 GitHub prereleases, and `main` creates stable releases. No npm or crates.io package
-is published. GitHub releases contain tags and notes, without executable assets.
-Successful Windows CI jobs retain a seven-day [test package](docs/ci-test-package.md)
-with the default-feature-free executable, installer, checksums and build metadata
-for isolated validation. This unsigned artifact is separate from release
-publication; no production deployment is configured.
+is published. Releases attach the checked Windows x64 **unsigned** ZIP and its
+SHA-256 checksum. Successful Windows CI jobs retain the same
+[package](docs/ci-test-package.md) for seven days. It includes the executable,
+installer, MIT license, dependency/Rust standard-library notices, internal
+checksums and build metadata. No production deployment is configured.
 
 With no prior release tags, semantic-release starts at `1.0.0-alpha.1` on `alpha`
 and `1.0.0` on `main`. The checked-in `0.0.0-development` Cargo version is a development
@@ -163,9 +163,10 @@ are created by setup.
 Releases create Git tags and GitHub release notes without modifying Cargo.toml,
 Cargo.lock or branch commits. The tag points to the commit that passed CI. The
 Cargo version remains a development placeholder; tags and GitHub Releases identify
-released versions. No generated CHANGELOG.md is committed. When executable
-packaging is implemented, its displayed version can be supplied during the CI
-build without committing version changes back to either branch.
+released versions. No generated CHANGELOG.md is committed. The executable still
+uses the development version; identify the package by its release tag and
+`build.json` source commit. The release job verifies the downloaded CI package's
+checksum and source commit before attaching it; it does not rebuild the binary.
 
 Releases run through the SHA-pinned `cycjimmy/semantic-release-action`. The action
 provides its own Node runtime and installs the latest semantic-release by default.

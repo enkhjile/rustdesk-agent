@@ -3,6 +3,7 @@ name = "rustdesk-agent"
 version = "0.0.0-development"
 edition = "2024"
 publish = false
+license = "MIT"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
