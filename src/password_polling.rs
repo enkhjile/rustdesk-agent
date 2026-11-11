@@ -5,18 +5,6 @@ use std::time::UNIX_EPOCH;
 use zeroize::Zeroizing;
 
 impl Poller {
-    fn password_request(&self, method: Method, path: &str) -> reqwest::RequestBuilder {
-        let mut endpoint = self.enrollment.info().management_origin;
-        endpoint.set_path(path);
-        let token = Zeroizing::new(format!("Bearer {}", self.enrollment.credential()));
-        let mut authorization =
-            header::HeaderValue::from_str(&token).expect("validated enrollment credential");
-        authorization.set_sensitive(true);
-        self.client
-            .request(method, endpoint)
-            .header(header::AUTHORIZATION, authorization)
-    }
-
     /// Called only in managed mode. Secret delivery is independent of policies.
     /// Once intent is persisted, neither an interrupted command nor a lost
     /// acknowledgement permits replay. Only the non-secret outcome is retried.
@@ -37,7 +25,8 @@ impl Poller {
             return self.deliver_password().await;
         }
         let mut response = match self
-            .password_request(Method::POST, "/v1/agent/password/claim")
+            .authenticated_request(Method::POST, "/v1/agent/password/claim")
+            .expect("validated enrollment credential")
             .send()
             .await
         {
@@ -128,7 +117,8 @@ impl Poller {
         })
         .to_string();
         let response = match self
-            .password_request(Method::POST, "/v1/agent/password/result")
+            .authenticated_request(Method::POST, "/v1/agent/password/result")
+            .expect("validated enrollment credential")
             .header(header::CONTENT_TYPE, "application/json")
             .body(body)
             .send()

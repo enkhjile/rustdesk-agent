@@ -5,7 +5,7 @@ use crate::{
     parse_desired,
     state::{DurableState, ManagementMode, SettingResult, StateStore},
 };
-use reqwest::{Client, ClientBuilder, header};
+use reqwest::{Client, ClientBuilder, Method, header};
 use serde::Serialize;
 use std::time::{Duration, SystemTime};
 use uuid::Uuid;
@@ -63,6 +63,23 @@ fn client_builder() -> ClientBuilder {
 }
 
 impl Poller {
+    fn authenticated_request(
+        &self,
+        method: Method,
+        path: &str,
+    ) -> Result<reqwest::RequestBuilder, header::InvalidHeaderValue> {
+        // Only this locally provisioned origin can receive the credential.
+        let mut endpoint = self.enrollment.info().management_origin;
+        endpoint.set_path(path);
+        let token = Zeroizing::new(format!("Bearer {}", self.enrollment.credential()));
+        let mut authorization = header::HeaderValue::from_str(&token)?;
+        authorization.set_sensitive(true);
+        Ok(self
+            .client
+            .request(method, endpoint)
+            .header(header::AUTHORIZATION, authorization))
+    }
+
     pub fn new(
         enrollment: Enrollment,
         mut store: impl StateStore + 'static,
@@ -206,16 +223,9 @@ impl Poller {
                 return (PollStatus::StorageError, None);
             }
         };
-        let mut endpoint = self.enrollment.info().management_origin;
-        endpoint.set_path("/v1/agent/status");
-        let token = Zeroizing::new(format!("Bearer {}", self.enrollment.credential()));
-        let mut authorization =
-            header::HeaderValue::from_str(&token).expect("validated enrollment token");
-        authorization.set_sensitive(true);
         let response = match self
-            .client
-            .post(endpoint)
-            .header(header::AUTHORIZATION, authorization)
+            .authenticated_request(Method::POST, "/v1/agent/status")
+            .expect("validated enrollment token")
             .header(header::CONTENT_TYPE, "application/json")
             .body(body)
             .send()
@@ -240,16 +250,10 @@ impl Poller {
                 None,
             );
         }
-        let retry_after = if code == 429 || response.status().is_server_error() {
-            response
-                .headers()
-                .get(header::RETRY_AFTER)
-                .and_then(|v| v.to_str().ok())
-                .and_then(|v| parse_retry_after(v, SystemTime::now()))
-        } else {
-            None
-        };
-        (PollStatus::HttpError { status: code }, retry_after)
+        (
+            PollStatus::HttpError { status: code },
+            response_retry_after(&response),
+        )
     }
 
     async fn fetch<F, Fut>(
@@ -262,16 +266,12 @@ impl Poller {
         F: FnMut(Setting, &'static str) -> Fut,
         Fut: std::future::Future<Output = SettingResult>,
     {
-        // Only this locally provisioned origin can receive the credential.
         let mode = Some(if apply.is_some() {
             ManagementMode::Managed
         } else {
             ManagementMode::ObserveOnly
         });
-        let mut endpoint = self.enrollment.info().management_origin;
-        endpoint.set_path("/v1/agent/desired");
-        let token = Zeroizing::new(format!("Bearer {}", self.enrollment.credential()));
-        let Ok(mut authorization) = header::HeaderValue::from_str(&token) else {
+        let Ok(request) = self.authenticated_request(Method::GET, "/v1/agent/desired") else {
             return (
                 PollStatus::Rejected {
                     reason: "invalid_device_credential",
@@ -279,11 +279,7 @@ impl Poller {
                 None,
             );
         };
-        authorization.set_sensitive(true);
-        let response = self
-            .client
-            .get(endpoint)
-            .header(header::AUTHORIZATION, authorization)
+        let response = request
             .header(header::ACCEPT, "application/json")
             .send()
             .await;
@@ -308,21 +304,11 @@ impl Poller {
             return (PollStatus::Unassigned, None);
         }
         if status != reqwest::StatusCode::OK {
-            let retry_after =
-                if status == reqwest::StatusCode::TOO_MANY_REQUESTS || status.is_server_error() {
-                    response
-                        .headers()
-                        .get(header::RETRY_AFTER)
-                        .and_then(|value| value.to_str().ok())
-                        .and_then(|value| parse_retry_after(value, SystemTime::now()))
-                } else {
-                    None
-                };
             return (
                 PollStatus::HttpError {
                     status: status.as_u16(),
                 },
-                retry_after,
+                response_retry_after(&response),
             );
         }
         let json = response
@@ -412,6 +398,18 @@ fn transport_error(error: reqwest::Error) -> PollStatus {
     } else {
         PollStatus::TransportError
     }
+}
+
+fn response_retry_after(response: &reqwest::Response) -> Option<u64> {
+    let status = response.status();
+    if status != reqwest::StatusCode::TOO_MANY_REQUESTS && !status.is_server_error() {
+        return None;
+    }
+    response
+        .headers()
+        .get(header::RETRY_AFTER)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| parse_retry_after(value, SystemTime::now()))
 }
 
 fn parse_retry_after(value: &str, now: SystemTime) -> Option<u64> {
