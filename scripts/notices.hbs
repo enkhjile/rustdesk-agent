@@ -1,0 +1,17 @@
+Third-party license notices
+===========================
+
+Generated from Cargo.lock for the Windows x64 build. Includes transitive and
+build dependencies; test-only dependencies are excluded. The agent itself is
+MIT licensed (see LICENSE). These notices do not relicense dependencies.
+
+{{#each licenses}}
+{{name}}
+{{#each used_by}}
+- {{crate.name}} {{crate.version}}{{#if crate.repository}} ({{crate.repository}}){{/if}}
+{{/each}}
+
+{{{text}}}
+
+------------------------------------------------------------
+{{/each}}

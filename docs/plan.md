@@ -78,9 +78,10 @@ that limitation is not evidence that setters need a custom client.
    install/upgrade/uninstall; [isolated runtime checks](validation/windows-installer.md)
    passed, including running upgrades and reporting after reinstall. No-policy
    heartbeats use the durable status outbox without enabling writes. Complete executable
-   provenance/signing and validate
-   report-write failure handling and physical power-loss durability. Select a
-   distribution license and include dependency notices before executable release.
+   pilot validation and validate report-write failure handling and physical
+   power-loss durability. MIT licensing and generated dependency notices are
+   included in the package. The first distribution is explicitly unsigned by
+   owner choice; code signing is deferred.
 4. **Authorize a rollout separately.** Maintain out-of-band access and test a
    small approved cohort before expansion. No production deployment is authorized
    by the isolated VM results.
