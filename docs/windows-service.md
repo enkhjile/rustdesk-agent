@@ -100,9 +100,10 @@ JSON separates `command_accepted` from `readback_matches`. The readback retains
 its `unverified_cli_value`/`ambiguous_default`/failure status and
 `live_state_verified` remains false because CLI fallback is possible. Exit zero
 means acceptance plus matching CLI readback, not verified connection behavior.
-A readback mismatch prints the report and exits nonzero. This command is not
-connected to polling or reconciliation; management still reports `unsupported`
-with null applied revision. See [isolated setter validation](validation/2026-11-09-official-cli-setters.md).
+A readback mismatch prints the report and exits nonzero. Managed polling uses
+this command as its settings worker and reports per-setting unverified outcomes,
+with null applied revision. Observe-only polling never invokes the worker and
+reports `unsupported`. See [isolated setter validation](validation/2026-11-09-official-cli-setters.md).
 
 Explicit `--set-option` invocations now share a machine-wide Windows mutex across
 sessions and accounts. It covers the version check, write and CLI readback for
@@ -117,7 +118,9 @@ the operator to inspect settings before retrying. This does not roll back a
 partial write.
 The lock is specific to this CLI entry point: older agents, direct library calls,
 RustDesk GUI and other writers do not participate. Mismatch detection remains
-necessary, and automatic retries/writes are still disabled.
+necessary. Managed polling reconciles settings again on subsequent valid desired
+responses; observe-only polling leaves them unchanged. Password commands use a
+separate durable non-replay protocol: only their result acknowledgements retry.
 
 Before launching RustDesk, the explicit setter also joins an unnamed,
 non-inheritable Windows Job Object configured to terminate member processes when
@@ -234,12 +237,12 @@ the other account and retained values after service restart and VM reboot.
 Original values were restored and the VM shut down. No guest UAC interaction
 was needed for those commands.
 
-Remaining tests include the other two allowlisted mode values, independent GUI
-and connection verification, disabled/unavailable RustDesk, whole-map/concurrent
-changes and cancellation during a real setter. Deployment also needs binary and
-report-directory protection, report-write failure handling and the other gates in
-the [current plan](plan.md). The explicit setter does not enable automatic service
-application or claim verified live state.
+Later validation covers all six allowlisted values, selected GUI and connection
+behaviors, unavailable processes, concurrent changes and cancellation during a
+real setter. The installer protects binary and report directories. See the
+[current plan](plan.md) for completed checks and remaining deployment gates.
+New installations default to Managed; upgrades preserve their mode unless one is
+explicitly selected. CLI readback still does not claim verified live state.
 
 Use the [validation index](validation/README.md) for dated environments, hashes,
 commands and limitations. Historical reports retain their original observations;

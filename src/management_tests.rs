@@ -877,3 +877,6 @@ async fn terminal_report_rejections_are_not_replayed_without_new_observation() {
         assert_eq!(fixture.attempts().len(), 1);
     }
 }
+
+#[path = "password_retry_tests.rs"]
+mod password_retry_tests;
