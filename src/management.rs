@@ -176,9 +176,7 @@ impl Poller {
                 self.failures = 0;
                 60
             } else {
-                let seconds = retry_delay(self.failures, retry_after, Uuid::new_v4().as_u128());
-                self.failures = self.failures.saturating_add(1);
-                seconds
+                next_failure_delay(&mut self.failures, retry_after)
             };
         if let Some((result, retry_after)) = &delivery {
             if matches!(
@@ -187,9 +185,7 @@ impl Poller {
             ) {
                 self.report_failures = 0;
             } else {
-                let delay =
-                    retry_delay(self.report_failures, *retry_after, Uuid::new_v4().as_u128());
-                self.report_failures = self.report_failures.saturating_add(1);
+                let delay = next_failure_delay(&mut self.report_failures, *retry_after);
                 next_poll_seconds =
                     if matches!(status, PollStatus::Accepted { .. } | PollStatus::Unassigned) {
                         delay
@@ -423,6 +419,12 @@ fn parse_retry_after(value: &str, now: SystemTime) -> Option<u64> {
             .map(|date| date.duration_since(now).unwrap_or_default().as_secs())
     })?;
     Some(seconds.min(300))
+}
+
+fn next_failure_delay(failures: &mut u32, retry_after: Option<u64>) -> u64 {
+    let delay = retry_delay(*failures, retry_after, Uuid::new_v4().as_u128());
+    *failures = failures.saturating_add(1);
+    delay
 }
 
 fn retry_delay(failures: u32, retry_after: Option<u64>, random: u128) -> u64 {

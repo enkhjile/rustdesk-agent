@@ -1,4 +1,4 @@
-use super::{PollStatus, Poller, response_retry_after, retry_delay};
+use super::{PollStatus, Poller, next_failure_delay, response_retry_after};
 use crate::password::{Attempt, Operation, Outcome};
 use reqwest::{Method, header};
 use std::time::UNIX_EPOCH;
@@ -19,12 +19,8 @@ impl Poller {
             self.password_failures = 0;
             self.password_retry_seconds = 0;
         } else {
-            self.password_retry_seconds = retry_delay(
-                self.password_failures,
-                retry_after,
-                uuid::Uuid::new_v4().as_u128(),
-            );
-            self.password_failures = self.password_failures.saturating_add(1);
+            self.password_retry_seconds =
+                next_failure_delay(&mut self.password_failures, retry_after);
         }
         status
     }
