@@ -52,6 +52,10 @@ try { Reject { & $installer -Action Uninstall -RustDeskPath $RustDeskPath } 'Uni
 finally { Remove-Item -LiteralPath "$directory\unexpected.txt" }
 & $installer -Action Upgrade -SourcePath $AgentPath -Sha256 $hash -RustDeskPath $RustDeskPath
 Assert ((Get-Service RustDeskAgent).Status -eq 'Stopped') 'Upgrade started a stopped service'
+# Regression: the guided installer starts a clean PowerShell process, which has
+# not loaded System.ServiceProcess through an earlier Get-Service call.
+& "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $installer -Action Upgrade -SourcePath $AgentPath -Sha256 $hash -RustDeskPath $RustDeskPath
+Assert ($LASTEXITCODE -eq 0) 'Upgrade failed in a clean PowerShell process'
 Assert ((Get-CimInstance Win32_Service -Filter "Name='RustDeskAgent'").PathName.EndsWith(' --manage')) 'Upgrade lost managed mode'
 & $installer -Action Upgrade -SourcePath $AgentPath -Sha256 $hash -RustDeskPath $RustDeskPath -Mode ObserveOnly
 Assert (!(Get-CimInstance Win32_Service -Filter "Name='RustDeskAgent'").PathName.EndsWith(' --manage')) 'Observe-only mode not selected'

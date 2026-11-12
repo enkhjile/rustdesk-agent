@@ -225,6 +225,7 @@ pub mod probe;
 pub mod setter;
 
 pub mod enrollment;
+pub mod setup;
 
 #[cfg(windows)]
 #[path = "windows/credentials.rs"]

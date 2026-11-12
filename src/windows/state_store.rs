@@ -123,6 +123,36 @@ pub fn initialize() -> io::Result<()> {
     let enrollment = credentials::load()?;
     initialize_at(&root()?, &credentials::service_sid()?, &enrollment.info())
 }
+/// Resume setup only when the directory is absent; never reset a partial or
+/// corrupt existing store, even if its state file is missing.
+pub fn initialize_or_validate(allow_initialization: bool) -> io::Result<()> {
+    credentials::require_admin()?;
+    let enrollment = credentials::load()?;
+    initialize_or_validate_at(
+        &root()?,
+        &credentials::service_sid()?,
+        &enrollment.info(),
+        allow_initialization,
+    )
+}
+fn initialize_or_validate_at(
+    path: &Path,
+    sid: &str,
+    info: &EnrollmentInfo,
+    allow_initialization: bool,
+) -> io::Result<()> {
+    match std::fs::symlink_metadata(path) {
+        Err(error) if error.kind() == io::ErrorKind::NotFound && allow_initialization => {
+            initialize_at(path, sid, info)
+        }
+        Err(error) => Err(error),
+        Ok(_) => {
+            DurableState::decode(&FileStore::open_at(path, sid)?.load()?, info)
+                .map_err(io::Error::other)?;
+            Ok(())
+        }
+    }
+}
 fn initialize_at(path: &Path, sid: &str, info: &EnrollmentInfo) -> io::Result<()> {
     let directory_policy = policy(sid, true)?;
     check(unsafe {
@@ -162,7 +192,12 @@ mod tests {
             agent_uuid: uuid::Uuid::new_v4(),
             management_origin: url::Url::parse("https://example.test").unwrap(),
         };
-        initialize_at(&path, sid, &info).unwrap();
+        assert!(initialize_or_validate_at(&path, sid, &info, false).is_err());
+        assert!(!path.exists());
+        initialize_or_validate_at(&path, sid, &info, true).unwrap();
+        let before = std::fs::read(path.join(STATE)).unwrap();
+        initialize_or_validate_at(&path, sid, &info, false).unwrap();
+        assert_eq!(std::fs::read(path.join(STATE)).unwrap(), before);
         assert!(initialize_at(&path, sid, &info).is_err());
         let mut store = FileStore::open_at(&path, sid).unwrap();
         assert!(FileStore::open_at(&path, sid).is_err());

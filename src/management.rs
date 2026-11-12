@@ -51,7 +51,7 @@ pub struct Poller {
     password_retry_seconds: u64,
 }
 
-fn client_builder() -> ClientBuilder {
+pub(crate) fn client_builder() -> ClientBuilder {
     let _ = rustls::crypto::ring::default_provider().install_default();
     Client::builder()
         .https_only(true)

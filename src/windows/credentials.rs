@@ -99,7 +99,7 @@ pub(crate) fn service_sid() -> io::Result<String> {
     Ok(sid)
 }
 
-pub(crate) fn require_admin() -> io::Result<()> {
+pub fn require_admin() -> io::Result<()> {
     let mut sid = null_mut();
     check(unsafe { ConvertStringSidToSidW(wide("S-1-5-32-544").as_ptr(), &mut sid) })?;
     let _memory = LocalMemory(sid);

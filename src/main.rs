@@ -38,6 +38,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
         println!("{}", serde_json::to_string_pretty(&info)?);
         Ok(())
+    } else if (args.len() == 1 && (args[0] == "--finish-setup" || args[0] == "--wait-for-check-in"))
+        || (args.len() == 2 && args[0] == "--finish-setup" && args[1] == "--initialize-if-missing")
+    {
+        rustdesk_agent::credentials::require_admin()?;
+        let enrollment = rustdesk_agent::credentials::load()?;
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+        if args[0] == "--finish-setup" {
+            runtime.block_on(rustdesk_agent::setup::bind(&enrollment))?;
+            rustdesk_agent::state_store::initialize_or_validate(args.len() == 2)?;
+            println!("Console binding and state ready");
+        } else {
+            runtime.block_on(rustdesk_agent::setup::wait_for_check_in(&enrollment))?;
+            println!("Console received an agent report");
+        }
+        Ok(())
     } else if args.len() == 1 && args[0] == "--init-state" {
         rustdesk_agent::state_store::initialize()?;
         println!("Management state initialized");

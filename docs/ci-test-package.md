@@ -1,5 +1,11 @@
 # Windows x64 unsigned package
 
+The release also includes `rustdesk-agent-setup.exe`: open it and enter the Console
+HTTPS URL and device credential. It handles installation, binding, initialization
+and startup; a newer setup executable upgrades while preserving enrollment/state.
+Console must support `/v1/agent/enroll`. See `docs/installer.md` for guided setup.
+The ZIP and commands below remain available for script-based administration.
+
 This first distribution is intentionally unsigned. Start with a noncritical pilot
 device and keep another way to access it. Windows may display publisher or
 SmartScreen warnings; do not disable system security controls globally.
