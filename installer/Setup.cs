@@ -16,6 +16,8 @@ internal static class Setup
     private static readonly string ProgramData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
     private static readonly string Agent = Path.Combine(ProgramFiles, @"RustDeskAgent\rustdesk-agent.exe");
     private const string ServiceKey = @"SYSTEM\CurrentControlSet\Services\RustDeskAgent";
+    private const int InitializationPending = 1;
+    private const int StartupPending = 2;
 
     [STAThread]
     private static void Main()
@@ -70,13 +72,35 @@ internal static class Setup
 
     internal static bool NeedsCompletion(bool upgrade, bool enrollmentExists, bool stateExists, int pending)
     {
-        if (upgrade && !enrollmentExists && pending != 1)
+        if (upgrade && !enrollmentExists && pending != InitializationPending)
             throw new InvalidOperationException("Enrollment is missing from an existing installation. Restore it before upgrading; setup will not create a replacement identity.");
         if (!enrollmentExists && stateExists)
             throw new InvalidOperationException("Enrollment is missing but state exists. Restore enrollment before retrying; setup will not replace this device's identity.");
-        if (enrollmentExists && !stateExists && pending != 1)
+        if (enrollmentExists && !stateExists && pending != InitializationPending)
             throw new InvalidOperationException("Durable state is missing. Restore it before upgrading; setup will not reset this device's history.");
         return !upgrade || pending != 0;
+    }
+
+    private static void SetPending(int pending)
+    {
+        using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(ServiceKey, true))
+            key.SetValue("SetupPending", pending, Microsoft.Win32.RegistryValueKind.DWord);
+    }
+
+    private static void CompleteSetup(int pending)
+    {
+        using (var service = new ServiceController("RustDeskAgent")) {
+            if (service.Status != ServiceControllerStatus.Stopped) {
+                service.Stop();
+                service.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(30));
+            }
+            Run(Agent, "--finish-setup" + (pending == InitializationPending ? " --initialize-if-missing" : ""));
+            SetPending(StartupPending);
+            service.Start();
+            service.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(30));
+        }
+        using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(ServiceKey, true))
+            key.DeleteValue("SetupPending", false);
     }
 
     private static string InstallCore(string origin, string credential, bool observeOnly)
@@ -117,26 +141,11 @@ internal static class Setup
                 "\" -Action " + (upgrade ? "Upgrade" : "Install") + " -SourcePath \"" + Path.Combine(staging, "rustdesk-agent.exe") +
                 "\" -Sha256 " + hash + (!upgrade && observeOnly ? " -Mode ObserveOnly" : ""));
             if (finish && pending == 0) {
-                pending = enrollmentExists ? 2 : 1;
-                using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(ServiceKey, true))
-                    key.SetValue("SetupPending", pending, Microsoft.Win32.RegistryValueKind.DWord);
+                pending = enrollmentExists ? StartupPending : InitializationPending;
+                SetPending(pending);
             }
             if (!enrollmentExists) Run(Agent, "--enroll \"" + origin + "\"", credential);
-            if (finish) {
-                using (var service = new ServiceController("RustDeskAgent")) {
-                    if (service.Status != ServiceControllerStatus.Stopped) {
-                        service.Stop();
-                        service.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(30));
-                    }
-                    Run(Agent, "--finish-setup" + (pending == 1 ? " --initialize-if-missing" : ""));
-                    using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(ServiceKey, true))
-                        key.SetValue("SetupPending", 2, Microsoft.Win32.RegistryValueKind.DWord);
-                    service.Start();
-                    service.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(30));
-                }
-                using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(ServiceKey, true))
-                    key.DeleteValue("SetupPending", false);
-            }
+            if (finish) CompleteSetup(pending);
             using (var service = new ServiceController("RustDeskAgent")) {
                 if (service.Status != ServiceControllerStatus.Running)
                     return "Upgrade complete. The service was stopped and remains stopped. Enrollment and state were preserved.";
