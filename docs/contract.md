@@ -1,5 +1,21 @@
 # Management contract
 
+## Guided enrollment
+
+`POST /v1/agent/enroll` authenticates with a Console-issued per-device Bearer
+credential and accepts only `{"agent_uuid":"<UUID v4>"}`. The credential selects
+the existing device; no administrator key or device selector is accepted. A first
+binding or identical retry returns 204. Rebinding to a different UUID or a UUID
+already assigned elsewhere returns 409. Invalid/revoked credentials and disabled
+devices are rejected. Normal polling still rejects unbound credentials.
+
+Persist enrollment before sending this request so retries retain the UUID.
+`GET /v1/agent/enroll` with the bound credential returns 202 until Console has a
+stored report, then 204. It does not update last-contact time or prove a fresh
+report after an upgrade. Both routes return `Cache-Control: no-store`.
+
+## Polling and reporting
+
 Implemented by the local [contract fixture](contract-testing.md) and the
 [Console fork integration](https://github.com/enkhjile/rustdesk-console/blob/main/docs/companion-agent.md).
 This does not imply production deployment or support in upstream v0.2.40.
@@ -9,8 +25,8 @@ body or path UUID alone. Credentials must not appear in URLs, process arguments,
 reports or logs. Console stores credential hashes and supports revocation; the
 companion rotation change adds administrator-issued replacements. The in-process
 fixture does not implement those administrator operations. Local provisioning
-and replacement are documented in [enrollment.md](enrollment.md). Enrollment UI
-remains unfinished. Limit requests/responses and enforce read/write deadlines.
+and replacement are documented in [enrollment.md](enrollment.md). Guided setup
+uses the enrollment routes above. Limit requests/responses and enforce read/write deadlines.
 No redirects. Fixed origin is provisioned locally by an administrator.
 
 `GET /v1/agent/desired` with `Authorization: Bearer <device credential>` returns HTTP 200, content-type JSON:

@@ -26,6 +26,8 @@ try {
     Copy-Item -LiteralPath $binary -Destination "$package/rustdesk-agent.exe"
     Copy-Item -LiteralPath $notices -Destination "$package/THIRD-PARTY-NOTICES.txt"
     Copy-Item scripts/install.ps1, LICENSE -Destination $package
+    & "$PSScriptRoot/build-setup.ps1" -BinaryPath $binary -NoticesPath $notices -OutputPath "$distribution/rustdesk-agent-setup.exe"
+    if ($LASTEXITCODE -ne 0) { throw 'Setup build failed' }
     Copy-Item docs/ci-test-package.md "$package/README.md"
     Copy-Item "$sysroot/share/doc/rust/COPYRIGHT-library.html" "$package/RUST-STANDARD-LIBRARY-NOTICES.html"
     [ordered]@{
@@ -43,7 +45,9 @@ try {
     } | Set-Content "$package/SHA256SUMS" -Encoding ascii
     $zip = Join-Path $distribution 'rustdesk-agent-windows-x64-unsigned.zip'
     Compress-Archive -Path "$package/*" -DestinationPath $zip
-    '{0}  {1}' -f (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant(), (Split-Path $zip -Leaf) |
+    Get-ChildItem -LiteralPath $distribution -File | Sort-Object Name | ForEach-Object {
+        '{0}  {1}' -f (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name
+    } |
         Set-Content "$distribution/SHA256SUMS" -Encoding ascii
 } finally {
     Pop-Location

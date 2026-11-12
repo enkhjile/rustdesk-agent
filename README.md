@@ -1,5 +1,10 @@
 # RustDesk Windows agent — development slices
 
+Use the unsigned `rustdesk-agent-setup.exe` to install on Windows: enter your
+Console HTTPS URL and device credential. Setup handles installation, UUID binding,
+state initialization and startup. Run a newer setup executable to upgrade while
+retaining enrollment and state. See [guided setup](docs/installer.md#guided-setup).
+
 Windows x64 companion agent in development. The service polls desired state over
 HTTPS and applies Console policies for two allowlisted settings using official
 RustDesk 1.4.7: approval mode and password verification method. New installations

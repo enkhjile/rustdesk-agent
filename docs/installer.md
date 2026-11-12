@@ -1,5 +1,38 @@
 # Windows installation
 
+## Guided setup
+
+Use the unsigned `rustdesk-agent-setup.exe` from a trusted release on Windows x64.
+It uses the included Windows .NET Framework 4.x and Windows PowerShell 5.1.
+Install official RustDesk 1.4.7 under Program Files first. Upgrade Console to the
+self-enrollment API before using this installer.
+
+Issue a device credential in Console's device panel. Open setup, approve the
+administrator prompt, and enter the Console HTTPS origin and credential in the
+masked field. Setup installs the service, saves encrypted enrollment, binds its
+UUID in Console, initializes state and starts the service. It then checks that
+Console has received an agent report. No PowerShell command, manual UUID copy or
+machine-wide execution-policy change is needed. The embedded PowerShell process
+uses a process-local execution-policy override. License notices are in the window.
+
+New installations default to managed mode; select **Reporting only** to leave
+settings unchanged. Run the newer setup executable to upgrade without a new
+token. Upgrades retain enrollment, durable state, permissions, management mode
+and running/stopped status. The service does not request UAC after setup.
+
+Rerun setup after an interrupted binding; it reuses the saved identity. Existing
+incomplete/corrupt state is never reset. Missing enrollment alongside retained
+state, or missing stores on an established installation, is rejected. A protected
+service-registry marker distinguishes interrupted first setup from an upgrade.
+An invalid saved token requires administrator credential
+recovery; setup does not overwrite it. Failures leave protected data for inspection.
+Initial check-in proves report delivery, not live setting verification; on upgrade,
+the check may acknowledge an earlier report.
+
+See [guided setup validation](validation/guided-setup.md) for tested behavior.
+
+## Script-based administration
+
 `scripts/install.ps1` provides administrator-driven Install, Upgrade and Uninstall
 operations for Windows x64. Use **64-bit Windows PowerShell 5.1**, elevated. The
 script does not request elevation, download executables, enroll a device or change
