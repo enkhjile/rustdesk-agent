@@ -159,6 +159,34 @@ internal static class Setup
         }
     }
 
+    private static Form CreateLicenseWindow()
+    {
+        var window = new Form { Text = "License notices", Size = new Size(700, 500), StartPosition = FormStartPosition.CenterParent };
+        var tabs = new TabControl { Dock = DockStyle.Fill };
+        foreach (var name in new[] { "LICENSE", "THIRD-PARTY-NOTICES.txt", "RUST-STANDARD-LIBRARY-NOTICES.html" }) {
+            string content;
+            using (var reader = new StreamReader(Assembly.GetExecutingAssembly().GetManifestResourceStream(name)))
+                content = reader.ReadToEnd();
+            var page = new TabPage(name);
+            if (name.EndsWith(".html", StringComparison.OrdinalIgnoreCase)) {
+                var browser = new WebBrowser { Dock = DockStyle.Fill, AllowWebBrowserDrop = false,
+                    IsWebBrowserContextMenuEnabled = false, WebBrowserShortcutsEnabled = false };
+                // Only display the bundled document and its internal anchors, never remote pages.
+                browser.Navigating += delegate(object sender, WebBrowserNavigatingEventArgs e) {
+                    e.Cancel = e.Url.GetLeftPart(UriPartial.Path) != "about:blank";
+                };
+                browser.DocumentText = content;
+                page.Controls.Add(browser);
+            } else {
+                page.Controls.Add(new TextBox { Multiline = true, ReadOnly = true,
+                    ScrollBars = ScrollBars.Both, Dock = DockStyle.Fill, Text = content });
+            }
+            tabs.TabPages.Add(page);
+        }
+        window.Controls.Add(tabs);
+        return window;
+    }
+
     private sealed class SetupWindow : Form
     {
         private readonly TextBox origin = new TextBox { Width = 450 };
@@ -179,13 +207,7 @@ internal static class Setup
             panel.Controls.Add(observe); panel.Controls.Add(install); panel.Controls.Add(status); Controls.Add(panel);
             var licenses = new LinkLabel { Text = "License notices", AutoSize = true };
             licenses.LinkClicked += delegate {
-                using (var window = new Form { Text = "License notices", Size = new Size(700, 500) }) {
-                    var text = new TextBox { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, Dock = DockStyle.Fill };
-                    foreach (var name in new[] { "LICENSE", "THIRD-PARTY-NOTICES.txt", "RUST-STANDARD-LIBRARY-NOTICES.html" })
-                        using (var reader = new StreamReader(Assembly.GetExecutingAssembly().GetManifestResourceStream(name)))
-                            text.AppendText(name + Environment.NewLine + reader.ReadToEnd() + Environment.NewLine);
-                    window.Controls.Add(text); window.ShowDialog(this);
-                }
+                using (var window = CreateLicenseWindow()) window.ShowDialog(this);
             };
             panel.Controls.Add(licenses);
             bool existing = Directory.Exists(Path.Combine(ProgramData, "RustDeskAgentEnrollment"));

@@ -39,3 +39,36 @@ foreach ($case in @(@($true,$false,$false,0),@($true,$true,$false,0),@($true,$fa
     if (!$rejected) { throw 'Missing established enrollment/state was accepted' }
 }
 'Fresh setup, upgrade, reinstall and fail-closed recovery decisions passed'
+
+# Exercise the packaged viewer without running setup or requesting elevation.
+Add-Type -AssemblyName System.Windows.Forms
+$factory = $assembly.GetType('Setup').GetMethod('CreateLicenseWindow', [Reflection.BindingFlags]'Static,NonPublic')
+if (!$factory) { throw 'Setup lacks a testable license viewer' }
+$window = $factory.Invoke($null, @())
+try {
+    $window.ShowInTaskbar = $false
+    $window.Opacity = 0
+    $window.Show()
+    $tabs = $window.Controls[0]
+    if ($tabs.TabPages.Count -ne 3) { throw 'Missing license notice tabs' }
+    foreach ($index in 0,1) {
+        $box = $tabs.TabPages[$index].Controls[0]
+        if (!$box.ReadOnly -or !$box.Text.Trim()) { throw 'Plain-text notices are not readable' }
+    }
+    $tabs.SelectedIndex = 2
+    $browser = $tabs.TabPages[2].Controls[0]
+    if ($browser -isnot [Windows.Forms.WebBrowser]) { throw 'HTML notices must be rendered, not shown as source' }
+    $deadline = [DateTime]::UtcNow.AddSeconds(15)
+    do {
+        [Windows.Forms.Application]::DoEvents()
+        Start-Sleep -Milliseconds 50
+    } until (($browser.Document -and $browser.Document.Body -and $browser.ReadyState -eq 'Complete') -or [DateTime]::UtcNow -gt $deadline)
+    $text = $browser.Document.Body.InnerText
+    if ($text -notmatch 'Copyright notices for The Rust Standard Library' -or $text -notmatch 'Apache' -or $text -match '<!DOCTYPE|<html|<h1>') {
+        throw 'Rust license HTML was not rendered as readable text'
+    }
+    $browser.Navigate('https://example.invalid/')
+    [Windows.Forms.Application]::DoEvents()
+    if ($browser.Url.GetLeftPart([UriPartial]::Path) -ne 'about:blank') { throw 'License viewer allowed external navigation' }
+} finally { $window.Dispose() }
+'License viewer renders bundled HTML, retains text notices and blocks external navigation'
