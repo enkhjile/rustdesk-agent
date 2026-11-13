@@ -36,6 +36,12 @@ struct Status {
     results: Results,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     management_mode: Option<rustdesk_agent::state::ManagementMode>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "rustdesk_agent::network::deserialize_ips"
+    )]
+    local_ips: Option<Vec<std::net::IpAddr>>,
 }
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]

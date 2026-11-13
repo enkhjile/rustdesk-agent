@@ -236,6 +236,7 @@ pub mod management;
 #[cfg(windows)]
 pub mod managed;
 
+pub mod network;
 pub mod state;
 
 pub mod password;
