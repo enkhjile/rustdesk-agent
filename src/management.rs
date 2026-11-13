@@ -305,6 +305,7 @@ impl Poller {
                 return (PollStatus::Rejected { reason }, None);
             }
             next.pending.as_mut().unwrap().management_mode = mode;
+            next.pending.as_mut().unwrap().local_ips = crate::network::collect();
             if self.commit(next).is_err() {
                 return (PollStatus::StorageError, None);
             }
@@ -326,6 +327,7 @@ impl Poller {
             let mut next = self.state.clone();
             next.observe(&state, id, version)?;
             next.pending.as_mut().unwrap().management_mode = mode;
+            next.pending.as_mut().unwrap().local_ips = crate::network::collect();
             if apply.is_some() {
                 for (key, _) in state.pairs() {
                     next.pending

@@ -56,6 +56,21 @@ Observe-only reports use `unsupported`. The Rust test fixture validates the full
 
 ## Current implementation limits
 
+Status reports may include `local_ips`, a non-null array of up to 64 unique IPv4
+or IPv6 address strings. Absence means unavailable or an older agent; an empty
+array means enumeration succeeded without eligible addresses. Windows collects
+preferred unicast addresses on operational adapters, excluding loopback,
+unspecified, multicast and IPv6 link-local addresses (which require interface
+scope). Addresses are sorted and deduplicated. Collection failure does not block
+policy reporting. Saved reports retain their original addresses on retry.
+Upgrade Console before installing agents that send this optional field.
+
+Console separately records the authenticated status request's source IP and
+receipt time; neither participates in report identity. Its device panel shows
+both sets of addresses and approximate city/region/country from its local City
+GeoIP database. This is not Windows Location Services or verified physical location.
+See the Console companion-agent documentation for database/proxy configuration.
+
 `parse_desired` checks schema version 1, a positive revision, at least one
 non-null setting, allowed enum values and unknown fields. Callers should use this
 function rather than deserialize `DesiredState` directly, which skips the semantic

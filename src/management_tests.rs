@@ -208,6 +208,8 @@ async fn unassigned_heartbeat_is_durable_and_retried_after_restart() {
     assert_eq!(body["observation_sequence"], 1);
     assert_eq!(body["applied_revision"], json!(null));
     assert_eq!(body["management_mode"], "observe_only");
+    #[cfg(windows)]
+    assert!(body["local_ips"].is_array());
     drop(client);
     let mut client = restored_poller(&fixture, store);
     assert_eq!(client.state.pending, Some(pending));

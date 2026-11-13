@@ -42,6 +42,12 @@ pub struct StatusReport {
         deserialize_with = "crate::present_setting"
     )]
     pub(crate) management_mode: Option<ManagementMode>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::network::deserialize_ips"
+    )]
+    pub(crate) local_ips: Option<Vec<std::net::IpAddr>>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -145,6 +151,7 @@ impl DurableState {
                 report.rustdesk_version.clone(),
             );
             expected.management_mode = report.management_mode;
+            expected.local_ips = report.local_ips.clone();
             for (key, _) in accepted.into_iter().flat_map(DesiredState::pairs) {
                 let result = match key {
                     Setting::ApproveMode => report.results.approve_mode,
@@ -220,6 +227,7 @@ impl DurableState {
             observation_sequence: self.sequence,
             applied_revision: None,
             management_mode: None,
+            local_ips: None,
             results: Results {
                 approve_mode: desired
                     .and_then(|s| s.settings.approve_mode)
@@ -276,6 +284,33 @@ pub(crate) mod tests {
     fn desired(revision: u64) -> DesiredState {
         crate::parse_desired(format!(r#"{{"schema_version":1,"revision":{revision},"settings":{{"approve_mode":"click"}}}}"#).as_bytes()).unwrap()
     }
+    #[test]
+    fn network_snapshot_survives_restart_and_legacy_reports_stay_unchanged() {
+        let info = info();
+        let mut state = DurableState::initial(&info);
+        state.heartbeat(None, None).unwrap();
+        let legacy = state.encode().unwrap();
+        assert!(
+            !String::from_utf8(legacy.clone())
+                .unwrap()
+                .contains("local_ips")
+        );
+        assert_eq!(
+            DurableState::decode(&legacy, &info)
+                .unwrap()
+                .encode()
+                .unwrap(),
+            legacy
+        );
+        let mut value: serde_json::Value = serde_json::from_slice(&legacy).unwrap();
+        value["pending"]["local_ips"] = serde_json::json!(["192.168.1.20", "2001:db8::1"]);
+        let bytes = serde_json::to_vec(&value).unwrap();
+        let restored = DurableState::decode(&bytes, &info).unwrap();
+        assert_eq!(serde_json::to_value(restored).unwrap(), value);
+        value["pending"]["local_ips"] = serde_json::json!(["not-an-ip"]);
+        assert!(DurableState::decode(&serde_json::to_vec(&value).unwrap(), &info).is_err());
+    }
+
     #[test]
     fn restart_preserves_revision_sequence_and_exact_pending_report() {
         let info = info();
